@@ -83,3 +83,46 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; }
 .shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: calc(100vh - 46px); }
 .rail { border-right: 1px solid var(--rule); background: var(--panel); padding: 1rem 1.1rem 2rem; overflow-y: auto; }
 main { padding: 1.2rem 1.6rem 4rem; min-width: 0; }
+
+/* Forms */
+fieldset { border: 0; padding: 0; margin: 0 0 1.1rem; min-width: 0; }
+legend { font-weight: 600; font-stretch: 85%; font-size: 1rem; padding: 0; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.45rem; }
+.pen { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+.pen.a { background: var(--a); }
+.pen.b { background: var(--b); }
+label { display: block; font-size: 0.82rem; color: var(--muted); font-stretch: 85%; margin: 0.35rem 0 0.15rem; }
+input, select, textarea, button { font: inherit; color: inherit; }
+input[type=text], input[type=number], select, textarea {
+  width: 100%;
+  min-width: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.32rem 0.45rem;
+  font-size: 0.88rem;
+}
+textarea { font-family: var(--mono); font-size: 0.8rem; min-height: 9.5rem; resize: vertical; line-height: 1.45; }
+.row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+.row.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.check { display: flex; align-items: center; gap: 0.45rem; color: var(--ink); font-size: 0.88rem; margin: 0.3rem 0; }
+.check input { margin: 0; }
+.hint { font-size: 0.78rem; color: var(--muted); font-stretch: 90%; margin: 0.15rem 0 0; }
+.seg { display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; margin-bottom: 0.4rem; }
+.seg label { margin: 0; flex: 1; text-align: center; padding: 0.3rem; cursor: pointer; color: var(--ink); font-size: 0.86rem; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--ink); color: var(--paper); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--a); outline-offset: -2px; }
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 3px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  font-stretch: 90%;
+}
+button.quiet { background: transparent; color: var(--ink); border-color: var(--rule); font-weight: 500; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.run { width: 100%; padding: 0.6rem; font-size: 1rem; }
