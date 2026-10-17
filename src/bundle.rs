@@ -173,3 +173,12 @@ pub fn save_to(dir: &Path, e: &Experiment) -> Result<String, String> {
     std::fs::write(dir.join(&name), serde_json::to_string(e).unwrap()).map_err(|err| err.to_string())?;
     Ok(name)
 }
+
+pub fn load(path: &Path) -> Result<Experiment, String> {
+    let s = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let e: Experiment = serde_json::from_str(&s).map_err(|e| format!("not a heterodyne experiment: {e}"))?;
+    if e.schema != SCHEMA {
+        return Err(format!("unsupported schema '{}' (this build reads {SCHEMA})", e.schema));
+    }
+    Ok(e)
+}
