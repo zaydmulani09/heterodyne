@@ -111,3 +111,38 @@ pub enum Input {
         max_new: usize,
     },
 }
+fn d_new() -> usize {
+    96
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Request {
+    pub a: Arm,
+    pub b: Arm,
+    pub input: Input,
+    #[serde(default = "d_chunk")]
+    pub chunk_tokens: usize,
+    #[serde(default = "d_max_chunks")]
+    pub max_chunks: usize,
+    /// Capture every layer's residual stream in both arms.
+    #[serde(default = "t")]
+    pub layers: bool,
+    /// Activation transplant per layer (denoise B with A's residual, noise A with B's).
+    #[serde(default)]
+    pub repair: bool,
+    /// Transplant every n-th layer (the last layer is always included).
+    #[serde(default = "d_one")]
+    pub repair_stride: usize,
+    /// Factorial attribution over the settings that differ between arms.
+    #[serde(default)]
+    pub attribution: bool,
+    /// Reference perturbation: arm A again with its ubatch split differently.
+    #[serde(default = "t")]
+    pub floor: bool,
+    #[serde(default = "d_topk")]
+    pub top_k: usize,
+    /// Leading positions of each chunk that are shown but left out of every total: predictions
+    /// from a handful of tokens of context are erratic and would dominate the averages.
+    #[serde(default = "d_skip")]
+    pub skip_first: usize,
+}
