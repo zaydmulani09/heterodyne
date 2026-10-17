@@ -80,3 +80,17 @@ fn err_string(buf: &[c_char]) -> String {
 fn cstr(s: &str) -> Result<CString, String> {
     CString::new(s).map_err(|_| "string contains a NUL byte".to_string())
 }
+
+#[derive(Clone, Debug)]
+pub struct Info {
+    pub n_layer: usize,
+    pub n_embd: usize,
+    pub n_vocab: usize,
+    pub n_ctx_train: usize,
+    pub n_params: u64,
+    pub size_bytes: u64,
+    pub desc: String,
+    /// Per-head K and V widths (from GGUF metadata, else n_embd / n_head).
+    pub head_k: usize,
+    pub head_v: usize,
+}
