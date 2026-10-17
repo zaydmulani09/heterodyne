@@ -169,3 +169,34 @@ fn quantized_variant_diverges_and_transplant_repairs_it() {
     let noi = r.repair_noise_mean.unwrap();
     assert!(noi.iter().all(|&x| x >= 0.0));
 }
+
+#[test]
+fn floor_stride_and_attribution_are_consistent() {
+    let Some(p) = fixture() else { return };
+    let p = p.to_string_lossy().into_owned();
+    let mut req = request(&p, &p);
+    req.b.cache_k = "bf16".into();
+    req.b.ubatch = 7;
+    req.b.flash_attn = "auto".into();
+    req.a.flash_attn = "on".into();
+    req.attribution = true;
+    req.repair_stride = 2;
+    let r = analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap();
+    // auto and on resolve to the same kernel on CPU, so flash attention is not a factor.
+    let fa = r.flash_attn_used.unwrap();
+    assert_eq!(fa[0], fa[1]);
+    let at = r.attribution.unwrap();
+    assert_eq!(at.factors, vec!["ubatch", "cache_k"]);
+    assert_eq!(at.cells.len(), 4);
+    assert_eq!(at.cells[0].mean_kl, 0.0);
+    assert_eq!(at.cells[3].mean_kl, r.summary.mean_kl);
+    assert!(at.cells.iter().all(|c| c.error.is_none()));
+    // The floor split is odd and recorded per chunk; transplants hit every other layer plus the last.
+    for c in &r.chunks {
+        let ub = c.floor_ubatch.unwrap();
+        assert!(ub % 2 == 1 && (ub as usize) < c.tokens.len());
+    }
+    let ls = r.repair_layers.unwrap();
+    assert!(ls.windows(2).all(|w| w[1] - w[0] <= 2));
+    assert_eq!(*ls.last().unwrap(), r.chunks[0].layer_err.as_ref().unwrap().len() - 1);
+}
