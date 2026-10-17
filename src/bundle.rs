@@ -164,3 +164,12 @@ pub fn record(
         integrity,
     })
 }
+
+/// Write an experiment into `dir` as `<created>-<title slug>.json`; returns the file name.
+pub fn save_to(dir: &Path, e: &Experiment) -> Result<String, String> {
+    let slug: String = e.notes.title.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' }).collect();
+    let slug: String = slug.trim_matches('-').chars().take(40).collect();
+    let name = format!("{}-{}.json", e.created_unix, if slug.is_empty() { "experiment" } else { &slug });
+    std::fs::write(dir.join(&name), serde_json::to_string(e).unwrap()).map_err(|err| err.to_string())?;
+    Ok(name)
+}
