@@ -178,6 +178,7 @@ uses an odd split and records it.
 | near-tie / confident flips | top-1 changes where A rated B's choice within 0.25 nats / at least 1 nat below its own | evidence on its own; the thresholds are conventions |
 | layer map | ‖h_B − h_A‖ / ‖h_A‖ of the residual stream after each layer | a cause: differences propagate whether or not they matter |
 | transplant curves | B re-run with A's residual written in after layer l (and the reverse); the KL that results | a general law: it holds for the text you ran |
+| attention / MLP split | the drop in that KL as the transplant point moves past a layer's attention block, then past its MLP | a property of the block alone: it counts what B's later layers make of that block's difference, on your text; layer 0's attention bar also holds token-embedding differences |
 | attribution table | every subset of differing settings switched to B's value and scored | an additive decomposition: interactions are shown, not split |
 | interval | 95% t-interval over chunks, positions within a chunk treated as correlated | exact with few chunks; with fewer than 5 it is flagged as approximate |
 
