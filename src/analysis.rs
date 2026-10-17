@@ -209,3 +209,20 @@ pub struct Chunk {
     /// [i][pos] KL(A || A with B's l_out-<repair_layers[i]> written in).
     pub repair_noise: Option<Vec<Vec<f32>>>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Generation {
+    pub prompt_tokens: Vec<i32>,
+    pub a: Vec<i32>,
+    pub b: Vec<i32>,
+    /// Index into the generated tokens where the arms first disagree.
+    pub fork: Option<usize>,
+    pub a_text: String,
+    pub b_text: String,
+    /// Whether batched teacher forcing reproduces both arms' choices at the fork
+    /// (incremental decoding and batched scoring can disagree when choices are close).
+    pub fork_reproduced: Option<bool>,
+    /// Under A's teacher-forced distribution at the fork: log p(A's token) - log p(B's token).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_gap_a: Option<f64>,
+}
