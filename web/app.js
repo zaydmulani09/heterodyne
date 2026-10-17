@@ -419,3 +419,43 @@ function tokenView(c) {
   });
   return box;
 }
+
+function heat(rows, toT, label, rowNames) {
+  // rows[r][pos]; row 0 drawn at the bottom.
+  const W = plotWidth();
+  const nr = rows.length, n = rows[0].length;
+  const rh = Math.max(4, Math.min(9, Math.floor(240 / nr)));
+  const H = M.t + nr * rh + M.b;
+  const dpr = devicePixelRatio || 1;
+  const cv = h("canvas", { class: "plot", width: Math.round(W * dpr), height: Math.round(H * dpr), style: `height:${H}px`, role: "img", "aria-label": "heatmap" });
+  const ctx = cv.getContext("2d");
+  ctx.scale(dpr, dpr);
+  const pw = W - M.l - M.r, step = pw / n;
+  for (let r = 0; r < nr; r++) {
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = ramp(toT(rows[r][i]));
+      ctx.fillRect(M.l + i * step, M.t + (nr - 1 - r) * rh, Math.ceil(step), rh);
+    }
+  }
+  const cs = getComputedStyle(document.body);
+  ctx.fillStyle = cs.getPropertyValue("--muted");
+  ctx.font = "10.5px Archivo, sans-serif";
+  ctx.textAlign = "right";
+  const names = rowNames || rows.map((_, r) => r);
+  for (let r = 0; r < nr; r += Math.max(1, Math.round(nr / 6))) ctx.fillText(`L${names[r]}`, M.l - 6, M.t + (nr - 1 - r) * rh + rh - 1);
+  ctx.textAlign = "center";
+  for (let i = 0; i < n; i += Math.max(1, Math.round(n / 8))) ctx.fillText(i, M.l + (i + 0.5) * step, H - 6);
+  ctx.strokeStyle = cs.getPropertyValue("--ink");
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(M.l + (S.sel + 0.5) * step, M.t - 4); ctx.lineTo(M.l + (S.sel + 0.5) * step, M.t + nr * rh + 2); ctx.stroke();
+  const at = (ev) => {
+    const b = cv.getBoundingClientRect();
+    const i = Math.floor(((ev.clientX - b.left) * (W / b.width) - M.l) / step);
+    const r = nr - 1 - Math.floor(((ev.clientY - b.top) * (H / b.height) - M.t) / rh);
+    return i >= 0 && i < n && r >= 0 && r < nr ? [r, i] : null;
+  };
+  cv.addEventListener("mousemove", (ev) => { const p = at(ev); tipAt(ev, p && label(names[p[0]], p[1], rows[p[0]][p[1]])); });
+  cv.addEventListener("mouseleave", (ev) => tipAt(ev, null));
+  cv.addEventListener("click", (ev) => { const p = at(ev); if (p) select(p[1]); });
+  return cv;
+}
