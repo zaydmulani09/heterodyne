@@ -527,3 +527,21 @@ function inspector(c) {
     c.repair_denoise && h("div", {}, h("h3", { style: "margin-top:.8rem" }, "Transplants at this position"), repairCurve(c, i),
       h("p", { class: "hint" }, "Each point is a separate run on this text. A curve that falls early means the divergence was already in the residual stream at that depth. It holds for this input only.")));
 }
+
+function attributionPanel(at) {
+  const full = at.cells[at.cells.length - 1];
+  const max = Math.max(...at.cells.map((c) => c.mean_kl), 1e-12);
+  const minimal = at.cells.filter((c) => !c.error && c.mean_kl >= 0.9 * full.mean_kl && c.switched.length).sort((a, b) => a.switched.length - b.switched.length || b.mean_kl - a.mean_kl)[0];
+  const table = h("table", { class: "attr" },
+    h("thead", {}, h("tr", {}, at.factors.map((f) => h("th", {}, f.replace("_", " "))), h("th", {}, "mean KL"), h("th", {}, ""), h("th", {}, "top-1 changed"))),
+    h("tbody", {}, at.cells.map((c) => h("tr", { class: c === full ? "full" : null },
+      at.factors.map((f) => h("td", { class: "c" }, c.switched.includes(f) ? "B" : "A")),
+      c.error
+        ? h("td", { colspan: 3, class: "hint" }, `llama.cpp rejected this combination: ${c.error}`)
+        : [h("td", {}, fmtKL(c.mean_kl)), h("td", { class: "barcell" }, h("i", { style: `width:${(100 * c.mean_kl / max).toFixed(1)}%` })), h("td", {}, pct(c.flip_rate))]))));
+  return panel("Which setting causes it", "Every combination of the settings that differ, each run on the same tokens and compared with A. A column shows whose value that setting took.",
+    table,
+    minimal && h("p", { class: "status", style: "margin-top:.5rem" }, minimal.mean_kl > full.mean_kl
+      ? `Switching only ${minimal.switched.join(" and ")} already diverges as much as switching everything (${(minimal.mean_kl / full.mean_kl).toFixed(2)}× the full divergence): the settings do not add.`
+      : `Switching only ${minimal.switched.join(" and ")} accounts for ${(100 * minimal.mean_kl / full.mean_kl).toFixed(0)}% of the full divergence on this text.`));
+}
