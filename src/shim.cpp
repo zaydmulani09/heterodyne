@@ -328,4 +328,13 @@ int32_t hd_flash_attn_used(void * mv, const hd_cfg * cfg, int32_t tok, char * er
     return used ? 1 : 0;
 }
 
+// Used by tests to make quantized variants without shipping llama-quantize.
+int32_t hd_quantize(const char * in, const char * out, int32_t ftype, int32_t nthread) {
+    init_once();
+    auto qp = llama_model_quantize_default_params();
+    qp.ftype = (llama_ftype) ftype;
+    qp.nthread = nthread;
+    return (int32_t) llama_model_quantize(in, out, &qp);
+}
+
 }  // extern "C"
