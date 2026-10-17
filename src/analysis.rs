@@ -297,3 +297,15 @@ pub struct Progress<'a> {
 fn l_out(l: usize) -> String {
     format!("l_out-{l}")
 }
+
+/// Token text; byte-level pieces that are not valid UTF-8 on their own are shown as <XX> bytes.
+fn piece(m: &Model, t: i32) -> String {
+    match String::from_utf8(m.piece(t)) {
+        Ok(s) => s,
+        Err(e) => e
+            .into_bytes()
+            .iter()
+            .map(|&b| if b.is_ascii_graphic() || b == b' ' { (b as char).to_string() } else { format!("<{b:02X}>") })
+            .collect(),
+    }
+}
