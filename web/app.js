@@ -92,3 +92,26 @@ function readArm(p) {
     threads: Math.max(1, +$(`#${p}-threads`).value || 1),
   };
 }
+function readForm() {
+  const a = readArm("a"), b = readArm("b");
+  if (!b.model) b.model = a.model;
+  const kind = $('input[name="kind"]:checked').value;
+  const input = kind === "text"
+    ? { kind: "text", text: $("#text").value }
+    : { kind: "generate", prompt: $("#text").value, chat: $("#chat").checked, max_new: +$("#max-new").value || 96 };
+  return {
+    request: {
+      a, b, input,
+      chunk_tokens: +$("#chunk").value || 256,
+      max_chunks: +$("#max-chunks").value || 4,
+      floor: $("#floor").checked,
+      layers: $("#layers").checked,
+      repair: $("#repair").checked,
+      repair_stride: Math.max(1, +$("#stride").value || 1),
+      attribution: $("#attribution").checked,
+      top_k: 8,
+      skip_first: Math.max(0, +$("#skip").value || 0),
+    },
+    notes: { title: $("#title").value.trim(), hypothesis: $("#hypothesis").value.trim(), interpretation: "" },
+  };
+}
