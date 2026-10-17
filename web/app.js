@@ -619,3 +619,33 @@ function showVerify(r) {
     r.notes.map((n) => h("p", {}, n)));
   main.prepend(box);
 }
+
+// ---------- wire up ----------
+$("#setup").addEventListener("submit", startRun);
+for (const r of document.querySelectorAll('input[name="kind"]')) r.addEventListener("change", () => setKind(r.value));
+$("#import").addEventListener("change", async (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  try { showExperiment(JSON.parse(await f.text()), null); }
+  catch (e) { renderError(`Could not read ${f.name}: ${e.message}`); }
+});
+let rt;
+addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => S.exp && render(), 150); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => S.exp && render());
+
+(async () => {
+  try { await loadState(); } catch (e) { renderError(`Cannot reach the heterodyne server: ${e.message}`); return; }
+  restoreForm();
+  // Reattach to a run still going on the server (page reloaded or reopened mid-run).
+  if (S.state.job != null) {
+    const j = await api(`/api/job?id=${S.state.job}`).catch(() => null);
+    if (j && j.status === "running") { poll(S.state.job); return; }
+  }
+  const q = new URLSearchParams(location.hash.slice(1));
+  const int = (k) => (Number.isInteger(+q.get(k)) && q.get(k) !== "" ? +q.get(k) : null);
+  if (q.get("file")) {
+    await openSaved(q.get("file"));
+    if (S.exp && int("chunk") != null) S.chunk = Math.max(0, Math.min(int("chunk"), S.exp.results.chunks.length - 1));
+    if (S.exp && int("pos") != null) select(int("pos"));
+  } else renderEmpty();
+})();
