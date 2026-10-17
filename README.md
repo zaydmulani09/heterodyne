@@ -195,13 +195,13 @@ outside the integrity checksum: interpretation is not evidence.
 | numerical floor (odd ubatch re-split, recorded per chunk) | implemented, tested |
 | residual-stream divergence map (`l_out` per layer) | implemented, tested |
 | transplants in both directions, every n-th layer | implemented, tested |
+| attention vs MLP split of every layer (transplants at `ffn_inp`) | implemented, tested; exercised on Qwen3-0.6B |
 | factorial attribution over up to 5 differing settings, rejected combinations recorded | implemented, tested on the fixture; exercised on Qwen3-0.6B |
 | flash attention attributed by what actually ran | implemented, tested |
 | greedy generation fork + teacher-forced re-check of the fork | implemented; exercised on Qwen3-0.6B |
 | experiment files with sha256 provenance, integrity checksum, exact replay | implemented, tested |
 | local web UI with auto-save and reattach after reload | implemented; tested by hand in Chromium-based browsers at desktop and phone widths, light and dark |
 | GPU backends | not built; not validated |
-| component-level transplants (attention vs MLP output) | planned |
 | build-to-build comparison (two llama.cpp versions) | planned |
 
 ### Tested models
