@@ -93,3 +93,20 @@ enum Cmd {
     /// Print what llama.cpp reports about a GGUF file.
     Info { model: PathBuf },
 }
+
+fn parse_set(base: &Arm, spec: &str) -> Result<Arm, String> {
+    let mut a = base.clone();
+    for kv in spec.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let (k, v) = kv.split_once('=').ok_or_else(|| format!("setting '{kv}' is not key=value"))?;
+        match k {
+            "ctk" | "cache_k" => a.cache_k = v.into(),
+            "ctv" | "cache_v" => a.cache_v = v.into(),
+            "fa" | "flash_attn" => a.flash_attn = v.into(),
+            "ub" | "ubatch" => a.ubatch = v.parse().map_err(|_| format!("bad ubatch '{v}'"))?,
+            "t" | "threads" => a.threads = v.parse().map_err(|_| format!("bad threads '{v}'"))?,
+            _ => return Err(format!("unknown setting '{k}' (ctk, ctv, fa, ub, threads)")),
+        }
+    }
+    a.cfg()?;
+    Ok(a)
+}
