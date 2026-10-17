@@ -50,3 +50,17 @@ pub struct Notes {
     #[serde(default)]
     pub interpretation: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Experiment {
+    pub schema: String,
+    pub created_unix: u64,
+    #[serde(default)]
+    pub notes: Notes,
+    pub request: Request,
+    pub provenance: Provenance,
+    pub elapsed_ms: u64,
+    pub results: Results,
+    /// sha256 of the canonical JSON of `request` (model paths blanked), `provenance.a/b.sha256` and `results`.
+    pub integrity: String,
+}
