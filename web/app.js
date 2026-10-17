@@ -223,3 +223,24 @@ function renderProgress(j, id) {
     h("button", { class: "quiet", type: "button", onclick: () => api(`/api/cancel?id=${id}`, {}) }, "Cancel"));
   if (!box.isConnected) main.replaceChildren(box);
 }
+
+function renderError(msg) {
+  main.replaceChildren(h("h2", {}, "The run stopped"), h("div", { class: "error" }, msg),
+    h("p", { class: "hint", style: "margin-top:.6rem" }, "Check the file paths and settings in the left panel, then run again."));
+}
+
+function renderEmpty(note) {
+  const recipe = (title, desc, apply) => h("button", { class: "recipe", type: "button", onclick: () => { apply(); $("#a-model").focus(); } }, h("strong", {}, title), h("span", {}, desc));
+  const same = () => { $("#b-model").value = ""; for (const f of ARM_FIELDS) $(`#b-${f}`).value = $(`#a-${f}`).value; };
+  main.replaceChildren(h("div", { class: "intro" },
+    note && h("p", { class: "status" }, note),
+    h("h1", {}, "Find where two runs of a model stop agreeing"),
+    h("p", {}, "Arm A and arm B read the same tokens in llama.cpp. heterodyne compares their next-token distributions at every position, maps where the difference appears inside the network, and can move activations from one arm into the other to test which layers carry it."),
+    h("p", {}, "Pick a starting point, choose your model files on the left, and run."),
+    h("div", { class: "recipes" },
+      recipe("Is my quant faithful?", "Put the full-precision GGUF in A and the quantized one in B.", () => { same(); setKind("text"); $("#repair").checked = true; $("#b-model").focus(); }),
+      recipe("Does a quantized KV cache matter?", "Same file twice; B stores K and V as q8_0. Attribution splits the two.", () => { same(); $("#b-ctk").value = "q8_0"; $("#b-ctv").value = "q8_0"; $("#attribution").checked = true; }),
+      recipe("Is the batch size changing outputs?", "Same file twice; B splits each chunk into ubatches of 64.", () => { same(); $("#b-ub").value = 64; }),
+      recipe("Where do the answers fork?", "Both arms answer a prompt greedily; see the first token where they disagree.", () => { setKind("generate"); $("#text").value = "A train leaves at 14:35 and the trip takes 2 hours and 50 minutes. When does it arrive? Answer briefly."; $("#repair").checked = true; })),
+    h("p", { class: "hint" }, "Everything runs on this machine on the CPU. Nothing is uploaded.")));
+}
