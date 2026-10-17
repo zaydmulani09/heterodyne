@@ -111,3 +111,20 @@ perplexity are identical to every printed digit (0.067050, 149 flips, 7.825 / 8.
 `verify` compares all stored numbers for exact equality;
 `experiment_roundtrips_and_verifies_exactly` exercises it in CI. Every file in `examples/` was
 re-run with `heterodyne verify` on the recording machine; see the results in section 7.
+
+## 6. A measurement artifact found and fixed: positions with little context
+
+The first full recording of the BF16 vs Q4_K_M experiment counted every position. At each
+chunk's first position (one token of context) Q4_K_M put most of its mass on the bytes of a
+UTF-8 byte-order mark, giving KL ≈ 7 there. With all positions counted:
+
+- mean KL was 0.123; with each chunk's first 16 positions excluded it is 0.067, so those 192
+  of 1,474 positions made up about half of the total;
+- the transplant curve showed a cliff at the last layer (0.063 → 0.0013), suggesting the final
+  block carried half the divergence; with them excluded the curve falls smoothly from 0.062
+  to 0.0036 over layers 0 to 26 and the last block adds about 0.002.
+
+Both effects are real llama.cpp behavior, but at positions nobody scores in practice.
+heterodyne now records `skip_first` in every request (default 16), draws those positions
+muted, and leaves them out of every total, interval, floor, layer mean, transplant mean and
+attribution cell.
