@@ -16,6 +16,8 @@ runtime settings that can change its numbers) on identical tokens and shows:
   after every layer;
 - **which layers carry it to the output**: activation transplants that write one arm's
   residual stream into the other, layer by layer, in llama.cpp's own numerics;
+- **attention or MLP**: the same transplant between each layer's attention and MLP blocks,
+  splitting every layer's share of the divergence between the two;
 - **which setting causes it**: every combination of the settings that differ, run and scored;
 - **where a greedy answer forks**, and whether that fork survives re-scoring.
 
