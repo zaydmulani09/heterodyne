@@ -376,3 +376,28 @@ fn start_run(st: &mut State, body: &str) -> Resp {
     });
     ok(json!({ "job": id }))
 }
+
+#[derive(Deserialize)]
+struct VerifyBody {
+    file: String,
+}
+
+fn start_verify(st: &mut State, body: &str) -> Resp {
+    let Some(path) = serde_json::from_str::<VerifyBody>(body).ok().and_then(|b| ws_file(st, &b.file)) else {
+        return err(400, "bad file name");
+    };
+    let e = match bundle::load(&path) {
+        Ok(e) => e,
+        Err(m) => return err(400, &m),
+    };
+    let search = st.model_dirs.clone();
+    let (id, _cancel) = match new_job(st, "verify") {
+        Ok(x) => x,
+        Err(r) => return r,
+    };
+    spawn(st, id, move |models, progress| {
+        let r = bundle::verify(&e, &search, models, progress)?;
+        serde_json::to_value(r).map_err(|e| e.to_string())
+    });
+    ok(json!({ "job": id }))
+}
