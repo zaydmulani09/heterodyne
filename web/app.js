@@ -595,3 +595,16 @@ function notesPanel() {
       h("button", { class: "quiet", type: "button", onclick: verify, title: "Re-run the saved request and compare every number" }, "Verify by re-running"),
       status));
 }
+
+function provenancePanel() {
+  const e = S.exp, p = e.provenance;
+  const m = (id) => [h("dt", {}, id === p.a ? "A file" : "B file"), h("dd", {}, `${id.path}`), h("dt", {}, "sha256"), h("dd", {}, id.sha256), h("dt", {}, "model"), h("dd", {}, `${id.desc}${id.general_name ? `, ${id.general_name}` : ""}; ${id.n_layer} layers, width ${id.n_embd}, vocab ${id.n_vocab}`)];
+  return h("details", { class: "prov" }, h("summary", {}, "Provenance"),
+    h("dl", {}, m(p.a), m(p.b),
+      h("dt", {}, "llama.cpp"), h("dd", {}, `${p.llama_cpp_commit} (${p.build} build)`),
+      h("dt", {}, "heterodyne"), h("dd", {}, p.heterodyne),
+      h("dt", {}, "system"), h("dd", {}, `${p.os}/${p.arch}; ${p.system_info}`),
+      h("dt", {}, "created"), h("dd", {}, new Date(e.created_unix * 1000).toString()),
+      h("dt", {}, "integrity"), h("dd", {}, e.integrity),
+      h("dt", {}, "replay"), h("dd", {}, "Re-running on the same machine and build reproduced every number exactly in heterodyne's tests. Other CPUs or llama.cpp builds can take different kernel paths; use Verify to see by how much.")));
+}
