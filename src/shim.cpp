@@ -1,0 +1,180 @@
+// Narrow C ABI over llama.cpp. Everything layout-sensitive (llama_context_params,
+// llama_batch, ggml_tensor) stays on this side; Rust only sees the hd_* structs below.
+#include "llama.h"
+#include "ggml.h"
+#include "ggml-backend.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <vector>
+
+// Mirrored in src/ffi.rs; keep field order identical.
+struct hd_info {
+    int32_t n_layer, n_embd, n_vocab, n_ctx_train;
+    uint64_t n_params, size_bytes;
+    char desc[128];
+    int32_t n_head;
+};
+
+struct hd_cfg {
+    int32_t n_threads;
+    int32_t n_ubatch;    // 0 = whole sequence in one ubatch
+    int32_t flash_attn;  // -1 auto, 0 off, 1 on
+    int32_t type_k;      // ggml_type
+    int32_t type_v;
+};
+
+struct hd_hooks {
+    int32_t n;
+    const char * const * names;
+    float * const * out;        // per hook: capture buffer (n_tok*width) or null
+    const float * const * src;  // per hook: patch source (n_tok*width) or null
+    int32_t width;
+};
+
+namespace {
+
+std::mutex g_log_mu;
+std::string g_log;  // recent warnings/errors from llama.cpp, surfaced in error messages
+
+void log_cb(ggml_log_level level, const char * text, void *) {
+    if (getenv("HETERODYNE_VERBOSE")) fputs(text, stderr);
+    if (level != GGML_LOG_LEVEL_ERROR && level != GGML_LOG_LEVEL_WARN) return;
+    std::lock_guard<std::mutex> lk(g_log_mu);
+    g_log += text;
+    if (g_log.size() > 4096) g_log.erase(0, g_log.size() - 4096);
+}
+
+void set_err(char * err, int32_t errlen, const std::string & msg) {
+    if (!err || errlen <= 0) return;
+    std::string full = msg;
+    {
+        std::lock_guard<std::mutex> lk(g_log_mu);
+        if (!g_log.empty()) { full += "\nllama.cpp log:\n" + g_log; g_log.clear(); }
+    }
+    snprintf(err, errlen, "%s", full.c_str());
+}
+
+int32_t copy_out(const std::string & s, char * buf, int32_t cap) {
+    if ((int32_t) s.size() + 1 > cap) return -(int32_t) (s.size() + 1);
+    memcpy(buf, s.data(), s.size());
+    buf[s.size()] = 0;
+    return (int32_t) s.size();
+}
+
+std::once_flag g_init;
+void init_once() {
+    std::call_once(g_init, [] {
+        llama_log_set(log_cb, nullptr);
+        llama_backend_init();
+    });
+}
+
+// One hooked tensor: captured into `out` or overwritten from `src`, row-block by row-block
+// (llama.cpp evaluates one ubatch at a time, so a tensor fires once per ubatch).
+struct Hook {
+    std::string name;
+    float * out = nullptr;
+    const float * src = nullptr;
+    int64_t rows_done = 0;
+};
+
+struct HookState {
+    std::vector<Hook> hooks;
+    int64_t width = 0;   // expected ne[0] (n_embd)
+    int64_t n_rows = 0;  // total rows expected (tokens)
+    std::string error;
+};
+
+bool eval_cb(ggml_tensor * t, bool ask, void * ud) {
+    auto * st = (HookState *) ud;
+    const char * name = ggml_get_name(t);
+    Hook * h = nullptr;
+    for (auto & x : st->hooks) if (x.name == name) { h = &x; break; }
+    if (ask) return h != nullptr;
+    if (!h) return true;
+    if (t->type != GGML_TYPE_F32 || !ggml_is_contiguous(t) || t->ne[0] != st->width || t->ne[2] != 1 || t->ne[3] != 1) {
+        st->error = std::string("tensor '") + name + "' has unexpected type/shape";
+        return false;
+    }
+    const int64_t rows = t->ne[1];
+    if (h->rows_done + rows > st->n_rows) {
+        st->error = std::string("tensor '") + name + "' produced more rows than tokens";
+        return false;
+    }
+    const size_t off = (size_t) h->rows_done * st->width;
+    const size_t nbytes = (size_t) rows * st->width * sizeof(float);
+    if (h->out) ggml_backend_tensor_get(t, h->out + off, 0, nbytes);
+    if (h->src) ggml_backend_tensor_set(t, h->src + off, 0, nbytes);
+    h->rows_done += rows;
+    return true;
+}
+
+void clear_log() {
+    std::lock_guard<std::mutex> lk(g_log_mu);
+    g_log.clear();
+}
+
+llama_context * make_ctx(llama_model * m, int32_t n_ctx, const hd_cfg * cfg, ggml_backend_sched_eval_callback cb, void * ud) {
+    clear_log();
+    auto cp = llama_context_default_params();
+    cp.n_ctx = n_ctx;
+    cp.n_batch = n_ctx;
+    cp.n_ubatch = cfg->n_ubatch > 0 ? std::min(cfg->n_ubatch, n_ctx) : n_ctx;
+    cp.n_seq_max = 1;
+    cp.n_threads = cfg->n_threads;
+    cp.n_threads_batch = cfg->n_threads;
+    cp.flash_attn_type = (llama_flash_attn_type) cfg->flash_attn;
+    cp.type_k = (ggml_type) cfg->type_k;
+    cp.type_v = (ggml_type) cfg->type_v;
+    cp.no_perf = true;
+    cp.cb_eval = cb;
+    cp.cb_eval_user_data = ud;
+    return llama_init_from_model(m, cp);
+}
+
+bool any_non_finite(const float * x, size_t n) {
+    for (size_t i = 0; i < n; i++) if (!std::isfinite(x[i])) return true;
+    return false;
+}
+
+}  // namespace
+
+extern "C" {
+
+void * hd_model_load(const char * path, char * err, int32_t errlen) {
+    init_once();
+    clear_log();
+    auto mp = llama_model_default_params();
+    mp.n_gpu_layers = 0;
+    llama_model * m = llama_model_load_from_file(path, mp);
+    if (!m) set_err(err, errlen, std::string("failed to load model: ") + path);
+    return m;
+}
+
+void hd_model_free(void * m) { llama_model_free((llama_model *) m); }
+
+void hd_model_info(void * mv, hd_info * out) {
+    auto * m = (llama_model *) mv;
+    memset(out, 0, sizeof(*out));
+    out->n_layer = llama_model_n_layer(m);
+    out->n_embd = llama_model_n_embd(m);
+    out->n_vocab = llama_vocab_n_tokens(llama_model_get_vocab(m));
+    out->n_ctx_train = llama_model_n_ctx_train(m);
+    out->n_params = llama_model_n_params(m);
+    out->size_bytes = llama_model_size(m);
+    llama_model_desc(m, out->desc, sizeof(out->desc));
+    out->n_head = llama_model_n_head(m);
+}
+
+int32_t hd_meta(void * m, const char * key, char * buf, int32_t cap) {
+    return llama_model_meta_val_str((llama_model *) m, key, buf, cap);
+}
+
+}  // extern "C"
