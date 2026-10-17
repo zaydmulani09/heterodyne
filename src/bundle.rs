@@ -64,3 +64,28 @@ pub struct Experiment {
     /// sha256 of the canonical JSON of `request` (model paths blanked), `provenance.a/b.sha256` and `results`.
     pub integrity: String,
 }
+
+static HASHES: Mutex<Option<HashMap<(String, u64, u128), String>>> = Mutex::new(None);
+
+/// sha256 of a file, memoized by (path, size, mtime) for the life of the process.
+pub fn file_sha256(path: &Path) -> Result<String, String> {
+    let md = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mtime = md.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
+    let key = (path.to_string_lossy().into_owned(), md.len(), mtime);
+    if let Some(h) = HASHES.lock().unwrap().get_or_insert_with(HashMap::new).get(&key) {
+        return Ok(h.clone());
+    }
+    let mut f = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    let h = hex(&hasher.finalize());
+    HASHES.lock().unwrap().as_mut().unwrap().insert(key, h.clone());
+    Ok(h)
+}
