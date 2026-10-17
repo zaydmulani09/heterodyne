@@ -15,6 +15,12 @@ fn main() {
     let x86 = env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("x86_64");
     let mut cfg = cmake::Config::new(&llama);
     cfg.profile("Release");
+    // The cmake crate replaces CMake's per-config flags with cc's, which on MSVC carry no
+    // optimization level; without this llama.cpp builds at -O0 and runs ~10x slower.
+    let opt = if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") { "/MD /O2 /Ob2 /DNDEBUG" } else { "-O3 -DNDEBUG" };
+    for v in ["CMAKE_C_FLAGS_RELEASE", "CMAKE_CXX_FLAGS_RELEASE"] {
+        cfg.define(v, opt);
+    }
     for (k, v) in [
         ("BUILD_SHARED_LIBS", "OFF"),
         ("LLAMA_BUILD_COMMON", "OFF"),
