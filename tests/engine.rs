@@ -43,18 +43,19 @@ fn toks(m: &Model) -> Vec<i32> {
     m.tokenize(TEXT, true).unwrap()
 }
 
-fn capture(m: &Model, c: &Cfg, t: &[i32]) -> (Vec<f32>, Vec<Vec<f32>>) {
+/// Every layer's `<kind>-<layer>` tensor: `l_out` (residual after the layer) or `ffn_inp` (after its attention).
+fn capture(m: &Model, c: &Cfg, t: &[i32], kind: &str) -> (Vec<f32>, Vec<Vec<f32>>) {
     let w = m.info.n_embd;
     let mut bufs: Vec<Vec<f32>> = (0..m.info.n_layer).map(|_| vec![0f32; t.len() * w]).collect();
     let mut hooks: Vec<Hook> =
-        bufs.iter_mut().enumerate().map(|(l, b)| Hook { name: format!("l_out-{l}"), capture: Some(b), patch: None }).collect();
+        bufs.iter_mut().enumerate().map(|(l, b)| Hook { name: format!("{kind}-{l}"), capture: Some(b), patch: None }).collect();
     let logits = m.eval(c, t, &mut hooks).unwrap();
     drop(hooks);
     (logits, bufs)
 }
 
-fn patch(m: &Model, c: &Cfg, t: &[i32], layer: usize, src: &[f32]) -> Vec<f32> {
-    m.eval(c, t, &mut [Hook { name: format!("l_out-{layer}"), capture: None, patch: Some(src) }]).unwrap()
+fn patch(m: &Model, c: &Cfg, t: &[i32], kind: &str, layer: usize, src: &[f32]) -> Vec<f32> {
+    m.eval(c, t, &mut [Hook { name: format!("{kind}-{layer}"), capture: None, patch: Some(src) }]).unwrap()
 }
 
 #[test]
@@ -63,7 +64,7 @@ fn observing_does_not_perturb() {
     let m = Model::load(&p).unwrap();
     let t = toks(&m);
     let plain = m.eval(&cfg(), &t, &mut []).unwrap();
-    let (hooked, caps) = capture(&m, &cfg(), &t);
+    let (hooked, caps) = capture(&m, &cfg(), &t, "l_out");
     assert!(plain == hooked, "capturing every l_out changed the logits");
     assert!(caps.iter().all(|c| c.iter().any(|&x| x != 0.0)), "a capture buffer stayed empty");
 }
@@ -73,11 +74,31 @@ fn self_patch_is_identity_and_writes_reach_downstream() {
     let Some(p) = fixture() else { return };
     let m = Model::load(&p).unwrap();
     let t = toks(&m);
-    let (base, caps) = capture(&m, &cfg(), &t);
+    let (base, caps) = capture(&m, &cfg(), &t, "l_out");
     let mid = m.info.n_layer / 2;
-    assert!(patch(&m, &cfg(), &t, mid, &caps[mid]) == base, "writing a tensor's own values back changed the logits");
+    assert!(patch(&m, &cfg(), &t, "l_out", mid, &caps[mid]) == base, "writing a tensor's own values back changed the logits");
     let zeros = vec![0f32; caps[mid].len()];
-    assert!(patch(&m, &cfg(), &t, mid, &zeros) != base, "zeroing a residual had no effect: writes are not reaching downstream ops");
+    assert!(
+        patch(&m, &cfg(), &t, "l_out", mid, &zeros) != base,
+        "zeroing a residual had no effect: writes are not reaching downstream ops"
+    );
+}
+
+#[test]
+fn post_attention_residual_is_observed_and_patched_exactly() {
+    // `ffn_inp-<l>`: the residual between a layer's attention and MLP blocks, the split point
+    // for the attention/MLP shares.
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let t = toks(&m);
+    let plain = m.eval(&cfg(), &t, &mut []).unwrap();
+    let (base, caps) = capture(&m, &cfg(), &t, "ffn_inp");
+    assert!(plain == base, "capturing every ffn_inp changed the logits");
+    for l in [0, m.info.n_layer - 1] {
+        assert!(patch(&m, &cfg(), &t, "ffn_inp", l, &caps[l]) == base, "writing ffn_inp-{l}'s own values back changed the logits");
+    }
+    let zeros = vec![0f32; caps[0].len()];
+    assert!(patch(&m, &cfg(), &t, "ffn_inp", 0, &zeros) != base, "zeroing ffn_inp-0 had no effect");
 }
 
 #[test]
@@ -89,11 +110,11 @@ fn last_layer_transplant_restores_reference_when_weights_match() {
     let t = toks(&m);
     let a = cfg();
     let b = Cfg { type_k: 30, ..cfg() }; // bf16 K cache (fixture head dim 8 rules out q8_0 blocks)
-    let (la, caps) = capture(&m, &a, &t);
+    let (la, caps) = capture(&m, &a, &t, "l_out");
     let lb = m.eval(&b, &t, &mut []).unwrap();
     assert!(la != lb, "bf16 K cache produced identical logits; the test would prove nothing");
     let last = m.info.n_layer - 1;
-    assert!(patch(&m, &b, &t, last, &caps[last]) == la);
+    assert!(patch(&m, &b, &t, "l_out", last, &caps[last]) == la);
 }
 
 #[test]
@@ -103,9 +124,9 @@ fn self_patch_is_identity_across_ubatches() {
     let m = Model::load(&p).unwrap();
     let t = toks(&m);
     let c = Cfg { n_ubatch: 7, ..cfg() };
-    let (base, caps) = capture(&m, &c, &t);
+    let (base, caps) = capture(&m, &c, &t, "l_out");
     let mid = m.info.n_layer / 2;
-    assert!(patch(&m, &c, &t, mid, &caps[mid]) == base);
+    assert!(patch(&m, &c, &t, "l_out", mid, &caps[mid]) == base);
 }
 
 #[test]
@@ -113,8 +134,8 @@ fn multi_ubatch_capture_fills_every_row() {
     let Some(p) = fixture() else { return };
     let m = Model::load(&p).unwrap();
     let t = toks(&m);
-    let (_, whole) = capture(&m, &cfg(), &t);
-    let (_, split) = capture(&m, &Cfg { n_ubatch: 7, ..cfg() }, &t);
+    let (_, whole) = capture(&m, &cfg(), &t, "l_out");
+    let (_, split) = capture(&m, &Cfg { n_ubatch: 7, ..cfg() }, &t, "l_out");
     let w = m.info.n_embd;
     // A row placed at the wrong offset would differ by O(1). Different ubatch sizes take
     // different kernels, so small differences are expected: up to ~1e-3 on Apple silicon.
