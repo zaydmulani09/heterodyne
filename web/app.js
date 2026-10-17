@@ -34,3 +34,12 @@ async function api(path, body) {
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
   return j;
 }
+
+// ---------- formatting ----------
+const fmtKL = (x) => (x == null ? "–" : x === 0 ? "0" : x < 1e-3 ? x.toExponential(2) : x.toFixed(4));
+const pct = (x) => (x == null ? "–" : (100 * x).toFixed(2) + "%");
+const short = (p) => (p || "").split(/[\\/]/).pop();
+const vis = (t) => t.replace(/ /g, "·").replace(/\n/g, "↵").replace(/\t/g, "⇥") || "∅";
+const tok = (id) => (S.exp.results.vocab[id] ?? `#${id}`);
+// How much A preferred its own top token over B's (files before v0.1 lack gap_ab).
+const gap = (p) => p.gap_ab ?? p.margin_a;
