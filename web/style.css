@@ -137,3 +137,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .history li button:hover { background: var(--paper); }
 .history li button[aria-current=true] { border-left-color: var(--ink); background: var(--paper); }
 .history .meta { display: block; font-size: 0.76rem; color: var(--muted); font-stretch: 85%; }
+
+/* Empty state */
+.intro { max-width: 68ch; }
+.intro h1 { margin-bottom: 0.6rem; }
+.recipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; margin: 1.2rem 0; }
+.recipe { text-align: left; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); padding: 0.8rem 0.9rem; font-weight: 500; }
+.recipe strong { display: block; font-stretch: 85%; font-size: 1rem; margin-bottom: 0.2rem; }
+.recipe span { color: var(--muted); font-size: 0.84rem; }
