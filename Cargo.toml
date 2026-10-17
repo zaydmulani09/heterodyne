@@ -1,0 +1,27 @@
+[package]
+name = "heterodyne"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Diff two llama.cpp runs token by token and layer by layer, and causally test which layers' divergence matters."
+license = "MIT"
+repository = "https://github.com/zaydmulani09/heterodyne"
+readme = "README.md"
+keywords = ["llama-cpp", "gguf", "quantization", "interpretability", "llm"]
+categories = ["command-line-utilities", "science"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+tiny_http = "0.12"
+
+
+[profile.dev]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
