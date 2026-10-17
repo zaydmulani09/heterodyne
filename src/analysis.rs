@@ -723,3 +723,30 @@ fn argmax(r: &[f32]) -> usize {
     }
     b
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_kind_the_graph_does_not_name_is_dropped_with_a_warning() {
+        // The fixture's llama graph names every real kind, so a made-up one stands in for an
+        // architecture without `ffn_inp-<l>` (e.g. parallel attention and MLP blocks).
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/stories260K.gguf");
+        if !p.is_file() {
+            assert!(std::env::var_os("HETERODYNE_REQUIRE_FIXTURE").is_none(), "test model missing: {}", p.display());
+            return;
+        }
+        let m = Model::load(&p).unwrap();
+        let toks = m.tokenize("Once upon a time", true).unwrap();
+        let cfg = Cfg { n_threads: 2, n_ubatch: 0, flash_attn: 0, type_k: 1, type_v: 1 };
+        let n = m.info.n_layer;
+        let (mut kinds, mut warnings) = (vec![L_OUT, ("attn_mix", "no mixing view"), FFN_INP], vec![]);
+        let (logits, caps) = capture_or_drop(&m, &cfg, &toks, n, &mut kinds, &mut warnings).unwrap();
+        assert_eq!(kinds, [L_OUT, FFN_INP]);
+        assert_eq!(caps.len(), 2 * n);
+        assert!(logits == m.eval(&cfg, &toks, &mut []).unwrap());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].starts_with("no mixing view: tensor 'attn_mix-"), "{warnings:?}");
+    }
+}
