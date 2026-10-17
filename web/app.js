@@ -330,3 +330,14 @@ function plotWidth() {
   const inner = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   return Math.max(300, (innerWidth > 1100 ? inner - 320 - 24 : inner) - 2);
 }
+
+function select(i) {
+  const c = S.exp.results.chunks[S.chunk];
+  S.sel = Math.max(0, Math.min(c.pos.length - 1, i));
+  if (S.file) history.replaceState(null, "", `#file=${encodeURIComponent(S.file)}&chunk=${S.chunk}&pos=${S.sel}`);
+  render();
+  const p = c.pos[S.sel];
+  announce(`Position ${S.sel}, KL ${fmtKL(p.kl)} nats${p.top_a !== p.top_b ? ", top token changed" : ""}`);
+  const t = $(".tokens span.sel");
+  if (t) t.scrollIntoView({ block: "nearest" });
+}
