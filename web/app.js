@@ -3,7 +3,8 @@
 const TOKEN = document.querySelector('meta[name="hd-token"]').content;
 const $ = (s, r = document) => r.querySelector(s);
 const main = $("#main");
-const S = { state: null, exp: null, file: null, chunk: 0, sel: 0, busy: false, dirty: false };
+// mid: transplant heatmaps show the point after each layer's attention block instead of after the layer.
+const S = { state: null, exp: null, file: null, chunk: 0, sel: 0, busy: false, dirty: false, mid: false };
 
 function h(tag, attrs, ...kids) {
   const n = document.createElement(tag);
@@ -292,6 +293,8 @@ function render() {
     h("button", { type: "button", role: "tab", "aria-selected": String(i === S.chunk), onclick: () => { S.chunk = i; S.sel = argmaxKL(c); render(); } }, `Chunk ${i + 1}`)));
 
   const c = r.chunks[S.chunk];
+  const mid = !!(S.mid && c.repair_mid_denoise);
+  const at = mid ? "after the attention block of layer" : "after layer";
   const left = h("div", {},
     panel("Divergence per token", `KL(A‖B) at each position, log scale. ${c.floor_kl ? `Grey line: the numerical floor, arm A against itself re-run${c.floor_ubatch ? ` with ubatch ${c.floor_ubatch}` : " with a different ubatch"}. ` : ""}Triangles mark positions where B's top token differs from A's; hollow ones were near-ties for A.`, stripChart(c)),
     panel("Text, coloured by divergence", "Each token is coloured by how differently the arms predicted it. Click a token, or use the arrow keys, to inspect it.", tokenView(c), legendKL()),
@@ -299,8 +302,9 @@ function render() {
       const es = errScale(c.layer_err);
       return panel("Where it appears inside the network", "Relative difference of the residual stream ‖h_B − h_A‖ / ‖h_A‖ after each layer (rows, first layer at the bottom) at each position (columns). This is correlation, not cause: depth amplifies small differences.", heat(c.layer_err, es.t, (l, i, v) => `layer ${l}, pos ${i}\nrel. diff ${v.toExponential(2)}`), legendErr(es));
     })(),
-    c.repair_denoise && panel("Restoring A's activations, layer by layer", "Intervention. Row l: B runs with A's residual stream written in after layer l; colour is the divergence from A that remains. A row that goes light means everything that differs was already in the residual stream by that depth; what is left comes from later layers.", heat(c.repair_denoise, klT, (l, i, v) => `B + A's residual after layer ${l}, pos ${i}\nKL left ${fmtKL(v)}`, c.repair_layers), legendKL()),
-    c.repair_noise && panel("Injecting B's activations, layer by layer", "Intervention. Row l: A runs with B's residual stream written in after layer l; colour is how far that pushes A away from itself. Dark rows mark depths where B's difference, carried forward through A's own later layers, already reaches the output.", heat(c.repair_noise, klT, (l, i, v) => `A + B's residual after layer ${l}, pos ${i}\nKL ${fmtKL(v)}`, c.repair_layers), legendKL()),
+    c.repair_denoise && panel("Restoring A's activations, layer by layer", `Intervention. Row l: B runs with A's residual stream written in ${at} l; colour is the divergence from A that remains. A row that goes light means everything that differs was already in the residual stream by that depth; what is left comes from later ${mid ? "blocks" : "layers"}.`, c.repair_mid_denoise && pointToggle("point-den"), heat(mid ? c.repair_mid_denoise : c.repair_denoise, klT, (l, i, v) => `B + A's residual ${at} ${l}, pos ${i}\nKL left ${fmtKL(v)}`, c.repair_layers), legendKL()),
+    c.repair_noise && panel("Injecting B's activations, layer by layer", `Intervention. Row l: A runs with B's residual stream written in ${at} l; colour is how far that pushes A away from itself. Dark rows mark depths where B's difference, carried forward through A's own later ${mid ? "blocks" : "layers"}, already reaches the output.`, c.repair_mid_noise && pointToggle("point-noi"), heat(mid ? c.repair_mid_noise : c.repair_noise, klT, (l, i, v) => `A + B's residual ${at} ${l}, pos ${i}\nKL ${fmtKL(v)}`, c.repair_layers), legendKL()),
+    r.repair_mid_denoise_mean && splitPanel(r),
     r.attribution && attributionPanel(r.attribution),
     r.generation && generationPanel(r.generation, c));
   const work = h("div", { class: "work" }, left, inspector(c));
@@ -528,7 +532,62 @@ function inspector(c) {
       lastErr != null && [h("dt", {}, "last-layer diff"), h("dd", {}, lastErr.toExponential(2))]),
     h("p", { class: "verdict" }, verdict),
     c.repair_denoise && h("div", {}, h("h3", { style: "margin-top:.8rem" }, "Transplants at this position"), repairCurve(c, i),
-      h("p", { class: "hint" }, "Each point is a separate run on this text. A curve that falls early means the divergence was already in the residual stream at that depth. It holds for this input only.")));
+      h("p", { class: "hint" }, `Each point is a separate run on this text. A curve that falls early means the divergence was already in the residual stream at that depth.${c.repair_mid_denoise ? " Half steps are after each layer's attention block: a drop into a half step is that attention block's share, a drop out of it the MLP's." : ""} It holds for this input only.`)));
+}
+
+// Which transplant point the heatmaps show, when the run split layers into attention and MLP.
+function pointToggle(name) {
+  return h("div", { class: "seg", role: "radiogroup", "aria-label": "Transplant point" },
+    [[false, "after each layer"], [true, "after each attention block"]].map(([v, label]) => h("label", {},
+      h("input", { type: "radio", name, checked: S.mid === v, onchange: () => { S.mid = v; render(); } }), label)));
+}
+
+// Moving the transplant point from the start of a layer to after its attention block, then to after
+// the whole layer, changes the divergence that remains; each step is that block's share. Layer 0
+// starts from the untouched run.
+function blockSteps(pre0, mid, post) {
+  let pre = pre0;
+  return mid.map((m, k) => { const st = [pre - m, m - post[k]]; pre = post[k]; return st; });
+}
+const signed = (x) => (x < 0 ? "−" : "") + fmtKL(Math.abs(x));
+
+function splitPanel(r) {
+  const L = r.repair_layers, total = r.summary.mean_kl, post = r.repair_denoise_mean;
+  const den = blockSteps(total, r.repair_mid_denoise_mean, post);
+  const noi = blockSteps(0, r.repair_mid_noise_mean, r.repair_noise_mean).map(([a, m]) => [-a, -m]);
+  const W = plotWidth(), H = 200;
+  const vals = den.flat(), hi = Math.max(1e-12, ...vals), lo = Math.min(0, ...vals);
+  const y = (v) => M.t + (H - M.t - M.b) * (hi - v) / (hi - lo);
+  const slot = (W - M.l - M.r) / L.length, bw = Math.max(1, Math.min(9, slot * 0.4));
+  const svg = s("svg", { class: "plot", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Divergence removed by restoring each layer's attention and MLP blocks" });
+  const g = s("g", { class: "grid axis" });
+  for (const v of new Set([lo, 0, hi / 2, hi].filter((v) => v === 0 || Math.abs(y(v) - y(0)) > 12))) g.append(s("line", { x1: M.l, x2: W - M.r, y1: y(v), y2: y(v) }), s("text", { x: M.l - 6, y: y(v) + 3.5, "text-anchor": "end" }, signed(v)));
+  for (let k = 0; k < L.length; k += Math.max(1, Math.round(L.length / 8))) g.append(s("text", { x: M.l + (k + 0.5) * slot, y: H - 6, "text-anchor": "middle" }, `L${L[k]}`));
+  svg.append(g);
+  den.forEach((st, k) => st.forEach((v, j) => svg.append(s("rect", {
+    x: M.l + (k + 0.5) * slot + (j ? 0.5 : -bw - 0.5), width: bw, y: Math.min(y(v), y(0)), height: Math.max(0.5, Math.abs(y(v) - y(0))), fill: j ? "var(--mlp)" : "var(--attn)",
+  }))));
+  svg.addEventListener("mousemove", (ev) => {
+    const b = svg.getBoundingClientRect(), k = Math.floor(((ev.clientX - b.left) * (W / b.width) - M.l) / slot);
+    if (k < 0 || k >= L.length) return tipAt(ev, null);
+    tipAt(ev, `layer ${L[k]}\nrestoring A in B: attention removes ${signed(den[k][0])}, MLP ${signed(den[k][1])}\ninjecting B into A: attention adds ${signed(noi[k][0])}, MLP ${signed(noi[k][1])}`);
+  });
+  svg.addEventListener("mouseleave", (ev) => tipAt(ev, null));
+  const sum = (steps, j) => steps.reduce((t, st) => t + st[j], 0);
+  let top = [0, 0];
+  den.forEach((st, k) => st.forEach((v, j) => { if (v > den[top[0]][top[1]]) top = [k, j]; }));
+  const share = (x) => `${Math.round((100 * x) / total)}%`;
+  const [sa, sm] = [sum(den, 0), sum(den, 1)];
+  return panel("Attention or MLP, layer by layer",
+    "Intervention, averaged over every scored position of every chunk. Moving the point where A's residual stream is written into B from the start of a layer to after its attention block, then to after its MLP, changes the divergence that remains: each bar is one such step, the part of the divergence that block adds in B. A bar below zero means restoring that block left B further from A. Layer 0's attention bar also holds any difference in the token embeddings, which llama.cpp's graph does not name separately. It holds for this text.",
+    svg,
+    h("div", { class: "legend" },
+      h("span", { class: "key" }, h("span", { class: "sw blk", style: "background:var(--attn)" }), "attention block"),
+      h("span", { class: "key" }, h("span", { class: "sw blk", style: "background:var(--mlp)" }), "MLP block"),
+      h("span", { class: "key" }, "nats of KL(A‖B) removed by restoring A's block")),
+    h("p", { class: "status", style: "margin-top:.5rem" }, total > 0
+      ? `Of the mean KL ${fmtKL(total)}, restoring A's attention blocks removes ${signed(sa)} (${share(sa)}) and its MLP blocks ${signed(sm)} (${share(sm)}); ${post[post.length - 1] ? `${fmtKL(post[post.length - 1])} remains after the last layer, from the final norm and output head` : "nothing remains after the last layer"}. The largest single step is the ${top[1] ? "MLP" : "attention"} block of layer ${L[top[0]]} (${signed(den[top[0]][top[1]])}). The other way round, B's attention blocks add ${signed(sum(noi, 0))} to A and its MLP blocks ${signed(sum(noi, 1))}.`
+      : "The arms do not diverge on the scored positions: there is nothing to split."));
 }
 
 function attributionPanel(at) {

@@ -207,6 +207,8 @@ svg .axis text, .axis-label { font-size: 10.5px; fill: var(--muted); font-family
 .legend .ramp { width: 120px; height: 8px; display: inline-block; vertical-align: middle; border: 1px solid var(--rule); }
 .legend .key { display: inline-flex; align-items: center; gap: 0.35rem; }
 .legend .sw { width: 14px; height: 2px; display: inline-block; }
+.legend .sw.blk { width: 9px; height: 9px; }
+.panel .seg { max-width: 24rem; }
 .heat-wrap { position: relative; }
 .heat-y { font-size: 0.74rem; color: var(--muted); margin-bottom: 0.15rem; }
 
