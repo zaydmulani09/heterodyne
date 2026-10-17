@@ -96,3 +96,18 @@ impl Arm {
         a
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Input {
+    /// Score fixed text (split into chunks).
+    Text { text: String },
+    /// Greedy-generate from a prompt with both arms, find the fork, then score A's continuation.
+    Generate {
+        prompt: String,
+        #[serde(default = "t")]
+        chat: bool,
+        #[serde(default = "d_new")]
+        max_new: usize,
+    },
+}
