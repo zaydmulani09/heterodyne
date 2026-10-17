@@ -68,3 +68,18 @@ a { color: var(--a); }
 code, .mono { font-family: var(--mono); font-size: 0.86em; }
 :focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Top bar */
+.bar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+.brand { display: flex; align-items: center; gap: 0.55rem; font-weight: 650; font-size: 1.15rem; font-stretch: 80%; letter-spacing: 0.01em; }
+.brand svg { width: 34px; height: 18px; }
+.build { margin-left: auto; color: var(--muted); font-size: 0.8rem; font-stretch: 80%; text-align: right; }
+
+.shell { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: calc(100vh - 46px); }
+.rail { border-right: 1px solid var(--rule); background: var(--panel); padding: 1rem 1.1rem 2rem; overflow-y: auto; }
+main { padding: 1.2rem 1.6rem 4rem; min-width: 0; }
