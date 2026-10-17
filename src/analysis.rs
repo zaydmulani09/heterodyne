@@ -155,3 +155,38 @@ fn d_chunk() -> usize {
 fn d_max_chunks() -> usize {
     8
 }
+fn d_one() -> usize {
+    1
+}
+fn d_topk() -> usize {
+    8
+}
+
+impl Request {
+    /// Bounds on everything a caller controls, checked before any allocation or llama.cpp call.
+    pub fn validate(&self) -> Result<(), String> {
+        self.a.cfg()?;
+        self.b.cfg()?;
+        let bound = |name: &str, v: usize, lo: usize, hi: usize| {
+            if (lo..=hi).contains(&v) {
+                Ok(())
+            } else {
+                Err(format!("{name} must be {lo} to {hi}, got {v}"))
+            }
+        };
+        bound("tokens per chunk", self.chunk_tokens, 2, 4096)?;
+        bound("max chunks", self.max_chunks, 1, 256)?;
+        bound("top_k", self.top_k, 0, 64)?;
+        bound("repair stride", self.repair_stride, 1, 1024)?;
+        if self.skip_first + 2 > self.chunk_tokens {
+            return Err(format!("unscored leading tokens ({}) must leave room in a {}-token chunk", self.skip_first, self.chunk_tokens));
+        }
+        match &self.input {
+            Input::Text { text } => bound("text length (bytes)", text.len(), 1, 8 << 20),
+            Input::Generate { prompt, max_new, .. } => {
+                bound("prompt length (bytes)", prompt.len(), 1, 64 << 10)?;
+                bound("tokens to generate", *max_new, 1, 4096)
+            }
+        }
+    }
+}
