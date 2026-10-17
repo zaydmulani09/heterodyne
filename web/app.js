@@ -468,3 +468,29 @@ function distList(list, color, target) {
       h("span", { class: "p" }, p >= 0.001 ? (100 * p).toFixed(1) + "%" : "<0.1%"));
   });
 }
+
+function repairCurve(c, i) {
+  if (!c.repair_denoise) return null;
+  const L = c.repair_layers, W = 288, H = 150, m = { l: 40, r: 8, t: 10, b: 22 };
+  const den = L.map((_, k) => c.repair_denoise[k][i]), noi = L.map((_, k) => c.repair_noise[k][i]);
+  const base = c.pos[i].kl, floor = c.floor_kl ? c.floor_kl[i] : null;
+  const all = [...den, ...noi, base, floor ?? 0].filter((v) => v > 0);
+  const hi = Math.ceil(Math.log10(Math.max(1e-6, ...all))), lo = Math.min(hi - 2, Math.floor(Math.log10(Math.min(...all, 1))) );
+  const lastL = L[L.length - 1] || 1;
+  const x = (l) => m.l + (W - m.l - m.r) * (l / lastL);
+  const y = (v) => m.t + (H - m.t - m.b) * (1 - (Math.log10(Math.max(v, 10 ** lo)) - lo) / (hi - lo));
+  const svg = s("svg", { class: "plot", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "transplant curve for this token" });
+  const g = s("g", { class: "grid axis" });
+  for (let d = lo; d <= hi; d++) g.append(s("line", { x1: m.l, x2: W - m.r, y1: y(10 ** d), y2: y(10 ** d) }), s("text", { x: m.l - 5, y: y(10 ** d) + 3.5, "text-anchor": "end" }, `1e${d}`));
+  for (const l of [0, Math.round(lastL / 2), lastL]) g.append(s("text", { x: x(l), y: H - 6, "text-anchor": "middle" }, `L${l}`));
+  svg.append(g);
+  svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y(base), y2: y(base), stroke: "var(--ink)", "stroke-dasharray": "4 3" }));
+  if (floor != null) svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y(floor), y2: y(floor), stroke: "var(--floor)" }));
+  const line = (vals, col) => s("polyline", { points: vals.map((v, k) => `${x(L[k])},${y(v)}`).join(" "), fill: "none", stroke: col, "stroke-width": 1.8 });
+  svg.append(line(den, "var(--a)"), line(noi, "var(--b)"));
+  return h("div", {}, svg, h("div", { class: "legend" },
+    h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--a)" }), "B with A's residual after layer"),
+    h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--b)" }), "A with B's residual after layer"),
+    h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--ink)" }), "untouched KL"),
+    floor != null && h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--floor)" }), "floor")));
+}
