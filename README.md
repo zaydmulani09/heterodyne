@@ -229,3 +229,17 @@ about 12 GB. Time is dominated by forward passes:
 The BF16 vs Q4_K_M experiment with transplants at all 28 layers (12 chunks, 708 passes) took
 15 minutes on the laptop above; the same comparison without transplants takes about a
 minute, including hashing both files.
+
+## Limitations
+
+- **Two arms must share a tokenizer**; layer maps and transplants also need the same number
+  of layers and width.
+- **One text is one text.** Use many chunks and read the interval; transplant curves are
+  interventions on your input, not properties of the model.
+- **CPU backend only.** GPU kernels compute differently; nothing here says anything about them.
+- **Replay is exact on the same machine and build** in our tests. Other CPUs take different
+  SIMD paths and can change low-order bits; `verify` reports by how much. Cross-machine replay
+  has not been measured.
+- **Generation forks** come from incremental decoding, while scoring re-runs the sequence in
+  one batch; the two can disagree, and the UI says when they do.
+- llama.cpp is pinned (b11696). Newer graph changes could rename tensors.
