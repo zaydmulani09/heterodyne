@@ -213,9 +213,10 @@ outside the integrity checksum: interpretation is not evidence.
 | qwen3 | Qwen3-0.6B BF16 (ggml-org) + unsloth Q8_0, UD-Q4_K_XL, Q4_K_M, Q3_K_M, Q2_K | engine test suite, local; experiments in `examples/` |
 
 Other architectures should work when their graph names each layer's residual output
-`l_out-<n>` (most decoder-only models in llama.cpp do). When it doesn't, heterodyne still
-compares outputs and says why the layer views are missing. Please file an architecture
-report when you try one.
+`l_out-<n>` (most decoder-only models in llama.cpp do); the attention/MLP split also needs
+`ffn_inp-<n>`, which models with parallel attention and MLP blocks (phi2, falcon, command-r)
+do not have. When a name is missing, heterodyne still compares outputs and says which views
+are missing and why. Please file an architecture report when you try one.
 
 ## Hardware and cost
 
