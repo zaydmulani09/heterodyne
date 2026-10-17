@@ -65,3 +65,12 @@ function inkOn(rgb) {
   return (1.05) / (L + 0.05) > (L + 0.05) / (0.0075 + 0.05) ? "#ffffff" : "#11161c";
 }
 const KL_LO = -5, KL_HI = 1; // colour scale: 1e-5 .. 10 nats, fixed so experiments compare
+const klT = (kl) => (kl <= 0 ? 0 : (Math.log10(kl) - KL_LO) / (KL_HI - KL_LO));
+// Residual relative difference: log scale fitted to the data shown (legend states the range).
+function errScale(rows) {
+  let mn = Infinity, mx = 0;
+  for (const r of rows) for (const v of r) if (v > 0) { if (v < mn) mn = v; if (v > mx) mx = v; }
+  if (!mx) return { t: () => 0, lo: 0, hi: 0 };
+  const hi = Math.ceil(Math.log10(mx) * 2) / 2, lo = Math.max(hi - 5, Math.floor(Math.log10(mn) * 2) / 2);
+  return { t: (e) => (e <= 0 ? 0 : (Math.log10(e) - lo) / (hi - lo)), lo, hi };
+}
