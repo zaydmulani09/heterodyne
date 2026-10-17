@@ -133,3 +133,31 @@ fn font(bytes: &[u8]) -> Resp {
 fn ok(v: Value) -> Resp {
     text(200, "application/json", v.to_string())
 }
+
+fn err(code: u16, msg: &str) -> Resp {
+    text(code, "application/json", json!({ "error": msg }).to_string())
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (b[i], b.get(i + 1).copied().and_then(hex), b.get(i + 2).copied().and_then(hex)) {
+            (b'%', Some(h), Some(l)) => {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+            }
+            (b'+', _, _) => {
+                out.push(b' ');
+                i += 1;
+            }
+            (c, _, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
