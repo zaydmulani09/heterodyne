@@ -294,10 +294,6 @@ pub struct Progress<'a> {
     pub stage: &'a str,
 }
 
-fn l_out(l: usize) -> String {
-    format!("l_out-{l}")
-}
-
 /// Token text; byte-level pieces that are not valid UTF-8 on their own are shown as <XX> bytes.
 fn piece(m: &Model, t: i32) -> String {
     match String::from_utf8(m.piece(t)) {
@@ -332,18 +328,48 @@ fn floor_split(cfg_ubatch: i32, n: usize) -> i32 {
     (if half % 2 == 0 { half + 1 } else { half }).clamp(1, (n as i32 - 1).max(1))
 }
 
-/// Capture buffers for every layer's residual output.
-fn capture_all(m: &Model, cfg: &Cfg, toks: &[i32], n_layer: usize) -> Result<(Vec<f32>, Vec<Vec<f32>>), String> {
-    let w = m.info.n_embd;
-    let mut bufs: Vec<Vec<f32>> = (0..n_layer).map(|_| vec![0f32; toks.len() * w]).collect();
-    let mut hooks: Vec<Hook> = bufs.iter_mut().enumerate().map(|(l, b)| Hook { name: l_out(l), capture: Some(b), patch: None }).collect();
+/// A per-layer tensor heterodyne hooks: graph name prefix, and what is lost when a graph lacks it.
+/// `l_out-<l>` is the residual after layer l.
+type Kind = (&'static str, &'static str);
+const L_OUT: Kind = ("l_out", "no layer map or transplants");
+
+/// Logits plus every layer's tensor of each kind; kind k at layer l is buffer `k * n_layer + l`.
+fn capture_all(m: &Model, cfg: &Cfg, toks: &[i32], n_layer: usize, kinds: &[Kind]) -> Result<(Vec<f32>, Vec<Vec<f32>>), String> {
+    let mut bufs = vec![vec![0f32; toks.len() * m.info.n_embd]; kinds.len() * n_layer];
+    let mut hooks: Vec<Hook> = bufs
+        .iter_mut()
+        .enumerate()
+        .map(|(i, b)| Hook { name: format!("{}-{}", kinds[i / n_layer].0, i % n_layer), capture: Some(b), patch: None })
+        .collect();
     let logits = m.eval(cfg, toks, &mut hooks)?;
     drop(hooks);
     Ok((logits, bufs))
 }
 
-fn patched(m: &Model, cfg: &Cfg, toks: &[i32], layer: usize, src: &[f32], out: &mut [f32]) -> Result<(), String> {
-    let mut hooks = [Hook { name: l_out(layer), capture: None, patch: Some(src) }];
+/// `capture_all`, except that a kind this architecture's graph does not name is dropped from
+/// `kinds`, with a warning, and the pass retried.
+fn capture_or_drop(
+    m: &Model,
+    cfg: &Cfg,
+    toks: &[i32],
+    n_layer: usize,
+    kinds: &mut Vec<Kind>,
+    warnings: &mut Vec<String>,
+) -> Result<(Vec<f32>, Vec<Vec<f32>>), String> {
+    loop {
+        match capture_all(m, cfg, toks, n_layer, kinds) {
+            Err(e) if e.contains(" saw 0 of ") => {
+                let line = e.lines().next().unwrap_or_default();
+                let Some(k) = kinds.iter().position(|k| line.starts_with(&format!("tensor '{}-", k.0))) else { return Err(e) };
+                warnings.push(format!("{}: {line}", kinds.remove(k).1));
+            }
+            r => return r,
+        }
+    }
+}
+
+fn patched(m: &Model, cfg: &Cfg, toks: &[i32], name: String, src: &[f32], out: &mut [f32]) -> Result<(), String> {
+    let mut hooks = [Hook { name, capture: None, patch: Some(src) }];
     m.eval_into(cfg, toks, &mut hooks, out)
 }
 
@@ -363,15 +389,16 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
         warnings.push("models differ in layer count or width: layer map and transplants disabled".into());
     }
     let (n_layer, v) = (ma.info.n_layer, ma.info.n_vocab);
+    let mut kinds: Vec<Kind> = if layers { vec![L_OUT] } else { vec![] };
     let skip = req.skip_first;
     let check = || if cancel.load(Ordering::Relaxed) { Err("cancelled".to_string()) } else { Ok(()) };
 
-    // Rough peak memory: ~4 logit buffers plus both arms' residual captures.
+    // Rough peak memory: ~4 logit buffers plus both arms' captures.
     let n_max = match &req.input {
         Input::Text { .. } => req.chunk_tokens,
         Input::Generate { max_new, .. } => req.chunk_tokens.max(*max_new + 512),
     };
-    let gib = (4 * n_max * v * 4 + if layers { 2 * n_layer * n_max * ma.info.n_embd * 4 } else { 0 }) as f64 / (1u64 << 30) as f64;
+    let gib = (4 * n_max * v * 4 + 2 * kinds.len() * n_layer * n_max * ma.info.n_embd * 4) as f64 / (1u64 << 30) as f64;
     if gib > 12.0 {
         return Err(format!("this run would need about {gib:.1} GB of RAM for logits and captures; lower the tokens per chunk"));
     }
@@ -459,7 +486,7 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
     let cells: Vec<u32> = if factors.len() >= 2 { (1..(1u32 << factors.len()) - 1).collect() } else { vec![] };
     let mut cell_acc: Vec<(f64, usize, usize, Option<String>)> = vec![(0.0, 0, 0, None); cells.len()];
 
-    let per_chunk = 2 + req.floor as usize + 2 * repair_layers.len() + cells.len();
+    let per_chunk = 2 + req.floor as usize + 2 * repair_layers.len() * kinds.len() + cells.len();
     let total = per_chunk * seqs.len();
     let mut done = 0;
     let mut tick = |stage: &str| {
@@ -473,23 +500,20 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
         check()?;
         let n = toks.len();
         let next = &toks[1..];
-        let (la, cap_a) = if layers {
-            match capture_all(&ma, &cfg_a, toks, n_layer) {
-                Ok(x) => x,
-                // This architecture does not name its per-layer residual `l_out-N`.
-                Err(e) if e.contains(" saw 0 of ") => {
-                    warnings.push(format!("no layer map or transplants: {}", e.lines().next().unwrap_or("")));
-                    layers = false;
-                    repair_layers.clear();
-                    (ma.eval(&cfg_a, toks, &mut [])?, vec![])
-                }
-                Err(e) => return Err(e),
+        let (la, cap_a) = if ci == 0 {
+            // Not every architecture's graph names these tensors: drop what is missing and say so.
+            let x = capture_or_drop(&ma, &cfg_a, toks, n_layer, &mut kinds, &mut warnings)?;
+            if kinds.first() != Some(&L_OUT) {
+                kinds.clear();
+                layers = false;
+                repair_layers.clear();
             }
+            x
         } else {
-            (ma.eval(&cfg_a, toks, &mut [])?, vec![])
+            capture_all(&ma, &cfg_a, toks, n_layer, &kinds)?
         };
         tick("arm A");
-        let (lb, cap_b) = if layers { capture_all(&mb, &cfg_b, toks, n_layer)? } else { (mb.eval(&cfg_b, toks, &mut [])?, vec![]) };
+        let (lb, cap_b) = capture_all(&mb, &cfg_b, toks, n_layer, &kinds)?;
         tick("arm B");
         let pos = stats::compare(&la, &lb, v, next, req.top_k);
 
@@ -523,20 +547,26 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
 
         let layer_err = layers.then(|| (0..n_layer).map(|l| stats::rel_err_rows(&cap_a[l], &cap_b[l], ma.info.n_embd)).collect());
 
-        let (mut den, mut noi) = (vec![], vec![]);
+        // [kind][i][pos]: transplants of each hooked kind at every repair layer.
+        let (mut den, mut noi) = (vec![vec![]; kinds.len()], vec![vec![]; kinds.len()]);
         if !repair_layers.is_empty() {
             let mut buf = vec![0f32; n * v];
             for &l in &repair_layers {
-                check()?;
-                patched(&mb, &cfg_b, toks, l, &cap_a[l], &mut buf)?;
-                den.push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect());
-                tick("transplant A→B");
-                check()?;
-                patched(&ma, &cfg_a, toks, l, &cap_b[l], &mut buf)?;
-                noi.push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect());
-                tick("transplant B→A");
+                for (k, kind) in kinds.iter().enumerate() {
+                    let (name, i) = (format!("{}-{l}", kind.0), k * n_layer + l);
+                    check()?;
+                    patched(&mb, &cfg_b, toks, name.clone(), &cap_a[i], &mut buf)?;
+                    den[k].push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect::<Vec<f32>>());
+                    tick("transplant A→B");
+                    check()?;
+                    patched(&ma, &cfg_a, toks, name, &cap_b[i], &mut buf)?;
+                    noi[k].push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect::<Vec<f32>>());
+                    tick("transplant B→A");
+                }
             }
         }
+        let mut den = den.into_iter().filter(|d| !d.is_empty());
+        let mut noi = noi.into_iter().filter(|d| !d.is_empty());
 
         for (k, &mask) in cells.iter().enumerate() {
             check()?;
@@ -570,8 +600,8 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
             floor_ubatch,
             layer_err,
             repair_layers: (!repair_layers.is_empty()).then(|| repair_layers.clone()),
-            repair_denoise: (!den.is_empty()).then_some(den),
-            repair_noise: (!noi.is_empty()).then_some(noi),
+            repair_denoise: den.next(),
+            repair_noise: noi.next(),
         });
     }
 
