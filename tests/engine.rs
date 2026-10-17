@@ -79,3 +79,19 @@ fn self_patch_is_identity_and_writes_reach_downstream() {
     let zeros = vec![0f32; caps[mid].len()];
     assert!(patch(&m, &cfg(), &t, mid, &zeros) != base, "zeroing a residual had no effect: writes are not reaching downstream ops");
 }
+
+#[test]
+fn last_layer_transplant_restores_reference_when_weights_match() {
+    // Same weights, different K-cache type: everything after the last residual is identical,
+    // so writing A's final residual into B must reproduce A's logits bit for bit.
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let t = toks(&m);
+    let a = cfg();
+    let b = Cfg { type_k: 30, ..cfg() }; // bf16 K cache (fixture head dim 8 rules out q8_0 blocks)
+    let (la, caps) = capture(&m, &a, &t);
+    let lb = m.eval(&b, &t, &mut []).unwrap();
+    assert!(la != lb, "bf16 K cache produced identical logits; the test would prove nothing");
+    let last = m.info.n_layer - 1;
+    assert!(patch(&m, &b, &t, last, &caps[last]) == la);
+}
