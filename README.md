@@ -213,3 +213,19 @@ Other architectures should work when their graph names each layer's residual out
 `l_out-<n>` (most decoder-only models in llama.cpp do). When it doesn't, heterodyne still
 compares outputs and says why the layer views are missing. Please file an architecture
 report when you try one.
+
+## Hardware and cost
+
+CPU only. Peak memory is both models (mmapped) plus about `4 × tokens × vocab × 4` bytes of
+logits (≈ 300 MB for a 128-token chunk of a 151k vocabulary) and, with layer views,
+`2 × layers × tokens × width × 4` bytes of residual captures (30 MB here; about 1.3 GB per
+chunk for an 80-layer, 8192-wide model). heterodyne refuses runs that would need more than
+about 12 GB. Time is dominated by forward passes:
+
+- a plain comparison: 2 passes per chunk, +1 for the floor;
+- transplants: +2 passes per transplanted layer per chunk;
+- attribution: +2^k − 2 passes per chunk for k differing settings.
+
+The BF16 vs Q4_K_M experiment with transplants at all 28 layers (12 chunks, 708 passes) took
+15 minutes on the laptop above; the same comparison without transplants takes about a
+minute, including hashing both files.
