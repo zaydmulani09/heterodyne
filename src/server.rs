@@ -104,3 +104,22 @@ fn open_browser(url: &str) {
         eprintln!("could not open a browser; visit {url}");
     }
 }
+
+type Resp = Response<std::io::Cursor<Vec<u8>>>;
+
+fn header(k: &str, v: &str) -> Header {
+    Header::from_bytes(k.as_bytes(), v.as_bytes()).unwrap()
+}
+
+fn text(code: u16, ctype: &str, body: String) -> Resp {
+    Response::from_string(body)
+        .with_status_code(code)
+        .with_header(header("Content-Type", ctype))
+        .with_header(header("Cache-Control", "no-store"))
+        .with_header(header("X-Content-Type-Options", "nosniff"))
+        .with_header(header("X-Frame-Options", "DENY"))
+        .with_header(header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+        ))
+}
