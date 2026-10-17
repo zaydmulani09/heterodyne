@@ -26,6 +26,8 @@
   --floor: #5f6b78;
   --ok: #2c7a4b;
   --warn: #9a5b00;
+  --attn: #11756d;
+  --mlp: #b07a12;
   --font: "Archivo", ui-sans-serif, system-ui, sans-serif;
   --mono: "Fragment Mono", ui-monospace, "Cascadia Mono", monospace;
   color-scheme: light;
@@ -45,6 +47,8 @@
     --floor: #6f7b88;
     --ok: #6cc28f;
     --warn: #e0a64a;
+    --attn: #4cc3b4;
+    --mlp: #e3b04e;
     color-scheme: dark;
   }
 }
