@@ -146,3 +146,12 @@ pub struct Request {
     #[serde(default = "d_skip")]
     pub skip_first: usize,
 }
+fn d_skip() -> usize {
+    16
+}
+fn d_chunk() -> usize {
+    256
+}
+fn d_max_chunks() -> usize {
+    8
+}
