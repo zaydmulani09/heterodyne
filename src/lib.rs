@@ -2,4 +2,5 @@
 pub mod analysis;
 pub mod bundle;
 pub mod ffi;
+pub mod server;
 pub mod stats;
