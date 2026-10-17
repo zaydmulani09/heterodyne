@@ -56,3 +56,38 @@ fn random_token() -> String {
     };
     format!("{:016x}{:016x}", h(1), h(2))
 }
+
+pub struct Options {
+    pub port: u16,
+    pub model_dirs: Vec<PathBuf>,
+    pub workspace: PathBuf,
+    pub open: bool,
+}
+
+pub fn serve(opts: Options) -> Result<(), String> {
+    std::fs::create_dir_all(&opts.workspace).map_err(|e| format!("{}: {e}", opts.workspace.display()))?;
+    let server = Server::http(("127.0.0.1", opts.port)).map_err(|e| format!("cannot bind 127.0.0.1:{}: {e}", opts.port))?;
+    let port = server.server_addr().to_ip().map_or(opts.port, |a| a.port());
+    let url = format!("http://127.0.0.1:{port}/");
+    let mut st = State {
+        token: random_token(),
+        origin_hosts: vec![format!("127.0.0.1:{port}"), format!("localhost:{port}")],
+        model_dirs: opts.model_dirs,
+        workspace: opts.workspace,
+        models: Arc::new(Mutex::new(Models::default())),
+        jobs: Arc::new(Mutex::new(HashMap::new())),
+        next_job: 1,
+        last_job: None,
+    };
+    eprintln!("heterodyne {} — llama.cpp {}", env!("CARGO_PKG_VERSION"), &env!("HD_LLAMA_COMMIT")[..env!("HD_LLAMA_COMMIT").len().min(10)]);
+    eprintln!("workspace: {}", st.workspace.display());
+    eprintln!("open {url}");
+    if opts.open {
+        open_browser(&url);
+    }
+    for mut req in server.incoming_requests() {
+        let resp = handle(&mut st, &mut req);
+        let _ = req.respond(resp);
+    }
+    Ok(())
+}
