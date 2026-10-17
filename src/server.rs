@@ -123,3 +123,13 @@ fn text(code: u16, ctype: &str, body: String) -> Resp {
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
         ))
 }
+
+fn font(bytes: &[u8]) -> Resp {
+    Response::from_data(bytes.to_vec())
+        .with_header(header("Content-Type", "font/woff2"))
+        .with_header(header("Cache-Control", "max-age=86400"))
+}
+
+fn ok(v: Value) -> Resp {
+    text(200, "application/json", v.to_string())
+}
