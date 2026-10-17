@@ -110,3 +110,16 @@ pub fn model_id(models: &mut Models, path: &str) -> Result<ModelId, String> {
         n_vocab: m.info.n_vocab,
     })
 }
+
+pub fn provenance(models: &mut Models, req: &Request) -> Result<Provenance, String> {
+    Ok(Provenance {
+        heterodyne: env!("CARGO_PKG_VERSION").into(),
+        llama_cpp_commit: env!("HD_LLAMA_COMMIT").into(),
+        build: env!("HD_BUILD_FLAGS").into(),
+        system_info: ffi::system_info(),
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        a: model_id(models, &req.a.model)?,
+        b: model_id(models, &req.b.model)?,
+    })
+}
