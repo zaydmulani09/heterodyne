@@ -34,9 +34,13 @@ data in place, before computing anything downstream
 it in topological order, an overwrite is seen by every downstream op.
 
 Tensors are addressed by their graph names: `l_out-<layer>` is the residual stream after
-each block. A tensor fires once per ubatch, so the shim tracks a row offset per hook and
+each block, `ffn_inp-<layer>` the residual between a block's attention and its MLP (the
+attention output already added in); the llama, qwen2 and qwen3 graphs at the pinned commit
+name both. A tensor fires once per ubatch, so the shim tracks a row offset per hook and
 checks at the end that every row of every hooked tensor was seen; missing names become an
-error, not silent zeros.
+error, not silent zeros. On a run's first pass, a kind of tensor the graph does not name is
+dropped with a warning saying what is lost (no layer map, or no attention/MLP split), and the
+rest of the run goes ahead.
 
 Everything layout-sensitive (`llama_context_params`, `llama_batch`, `ggml_tensor`) stays in
 C++. Rust sees only the `hd_*` structs we define, so a llama.cpp update cannot silently
