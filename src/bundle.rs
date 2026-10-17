@@ -38,3 +38,15 @@ pub struct Provenance {
     pub a: ModelId,
     pub b: ModelId,
 }
+
+/// Free text written by the person running the experiment. Kept apart from measured data
+/// and outside the integrity hash: interpretation is not evidence.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Notes {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub hypothesis: String,
+    #[serde(default)]
+    pub interpretation: String,
+}
