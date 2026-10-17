@@ -107,3 +107,38 @@ fn self_patch_is_identity_across_ubatches() {
     let mid = m.info.n_layer / 2;
     assert!(patch(&m, &c, &t, mid, &caps[mid]) == base);
 }
+
+#[test]
+fn multi_ubatch_capture_fills_every_row() {
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let t = toks(&m);
+    let (_, whole) = capture(&m, &cfg(), &t);
+    let (_, split) = capture(&m, &Cfg { n_ubatch: 7, ..cfg() }, &t);
+    let w = m.info.n_embd;
+    for l in 0..m.info.n_layer {
+        for (i, (ra, rb)) in whole[l].chunks(w).zip(split[l].chunks(w)).enumerate() {
+            let err = heterodyne::stats::rel_err_rows(ra, rb, w)[0];
+            assert!(err < 1e-3, "layer {l} row {i}: rel err {err} between ubatch splits");
+        }
+    }
+}
+
+fn request(a: &str, b: &str) -> Request {
+    let arm =
+        |m: &str| Arm { model: m.into(), threads: 2, ubatch: 0, flash_attn: "off".into(), cache_k: "f16".into(), cache_v: "f16".into() };
+    Request {
+        a: arm(a),
+        b: arm(b),
+        input: Input::Text { text: TEXT.repeat(3) },
+        chunk_tokens: 48,
+        max_chunks: 3,
+        layers: true,
+        repair: true,
+        repair_stride: 1,
+        attribution: false,
+        floor: true,
+        top_k: 4,
+        skip_first: 4,
+    }
+}
