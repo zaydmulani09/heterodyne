@@ -126,6 +126,20 @@ It falls steadily over all 28 layers: no single block carries it. The 0.0013 lef
 last layer is what the final norm and output head of the two files add on their own. The
 reverse transplant (Q4_K_M's residual written into BF16) rises just as smoothly.
 
+**Attention or MLP.** A second transplant point after each layer's attention block
+([`examples/qwen3-bf16-vs-q4km-split.json`](examples/qwen3-bf16-vs-q4km-split.json); its
+after-layer transplants reproduce the run above bit for bit) splits every step in two.
+Restoring BF16 in Q4_K_M, the attention blocks remove 0.030 (0.019–0.041) of the 0.067 and the
+MLP blocks 0.036 (0.024–0.048). The paired difference, 0.006 (−0.011–0.022), includes zero,
+and attention's part ranges from 20% to 82% across chunks: on this text the two cannot be told
+apart. Injecting Q4_K_M into BF16, the MLP blocks add more, 0.040 against 0.026 (paired
+difference 0.014, 0.005–0.023). Both blocks add divergence in most layers; the largest single
+step is layer 0's attention (0.0055), which also holds any difference in the token
+embeddings. A few steps are negative (layer 2's attention, −0.0014): restoring that block
+alone left Q4_K_M further from BF16. These are interventions on one text. They say where
+restoring BF16's activations removes the divergence here, not which block's weights quantize
+worse in general.
+
 How these totals are computed matters. The first version of this experiment counted every
 position, including predictions made from one or two tokens of context, where Q4_K_M
 confidently emits UTF-8 byte-order-mark bytes (KL ≈ 7 at each chunk's first position). Those
