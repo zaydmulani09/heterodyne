@@ -82,3 +82,87 @@ Arm settings: `ctk`/`ctv` (KV cache type: f32, f16, bf16, q8_0, q5_1, q5_0, q4_1
 iq4_nl), `fa` (flash attention: auto, on, off), `ub` (ubatch size, 0 = whole chunk),
 `threads`. `--b-set` starts from A's settings; `--b` defaults to A's file. `--skip-first`
 (default 16) sets how many leading tokens of each chunk are shown but not counted.
+
+## What it found on a laptop
+
+All numbers below come from the experiment files in [`examples/`](examples/), recorded on an
+Intel i7-1355U (AVX2, CPU only) with llama.cpp b11696 and Qwen3-0.6B: ggml-org's BF16 GGUF as
+the reference, unsloth's quants as variants, [`examples/corpus.txt`](examples/corpus.txt)
+(prose, arithmetic, Python, SQL, JSON, shell, facts, dialogue) in twelve 128-token chunks,
+1,282 scored positions. Intervals are 95% t-intervals over chunks. One model, one text, one
+machine: treat these as observations and re-run them on yours.
+
+**How far each quant drifts from BF16.**
+
+| B | mean KL(A‖B) | top-1 changed | of which confident | perplexity (A: 7.83) |
+|---|---|---|---|---|
+| Q8_0 | 0.0022 (0.0015–0.0028) | 2.2% | 0 | 7.83 |
+| UD-Q4_K_XL | 0.058 (0.043–0.073) | 11.3% | 16 | 8.33 |
+| Q4_K_M | 0.067 (0.052–0.083) | 11.6% | 25 | 8.53 |
+| Q3_K_M | 0.214 (0.169–0.260) | 20.8% | 96 | 9.47 |
+| Q2_K | 0.780 (0.636–0.923) | 36.3% | 308 | 16.75 |
+
+"Confident" means B's top token was one BF16 rated at least 1 nat below its own choice; every
+Q8_0 flip was a near-tie (within 0.25 nats). Both thresholds are conventions, not tests. The
+two 4-bit files' intervals overlap, but they were scored on the same positions, so the right
+comparison is paired: Q4_K_M minus UD-Q4_K_XL = 0.0087 (0.0016–0.0158). On this text the
+UD file diverges less.
+
+**Where Q4_K_M's divergence comes from.** Writing BF16's residual stream into Q4_K_M after
+layer *l* and measuring what divergence is left:
+
+```
+layer   0      4      8      12     16     20     24     26     27
+KL    0.062  0.052  0.038  0.029  0.021  0.013  0.006  0.004  0.0013
+```
+
+It falls steadily over all 28 layers: no single block carries it. The 0.0013 left after the
+last layer is what the final norm and output head of the two files add on their own. The
+reverse transplant (Q4_K_M's residual written into BF16) rises just as smoothly.
+
+How these totals are computed matters. The first version of this experiment counted every
+position, including predictions made from one or two tokens of context, where Q4_K_M
+confidently emits UTF-8 byte-order-mark bytes (KL ≈ 7 at each chunk's first position). Those
+few positions made up half of the mean and made the last block look responsible for half of
+the divergence. heterodyne now shows them but leaves the first 16 tokens of each chunk out of
+every total; the setting is recorded in the experiment file.
+
+**A confident flip, in code.** In `is_prime`, after `if n < 2:\n        return`, BF16 puts
+97.9% on ` False`; Q4_K_M puts 79.1% on ` True` (screenshot above; KL 1.69). Writing BF16's
+residual into Q4_K_M brings that token's KL from 0.48 after layer 6 down to 0.04 after layer 9;
+writing Q4_K_M's residual into BF16 reproduces the flip from about layer 12 (KL 0.81, then
+1.4 by layer 15). At this token, in this text, the decisive difference forms in layers 6 to 12.
+
+**Which runtime setting changes the output.** Same Q8_0 file twice; B adds a q8_0 K and V
+cache and splits each chunk into ubatches of 63. Every combination, scored:
+
+| switched to B's value | mean KL | top-1 changed |
+|---|---|---|
+| ubatch (whole chunk → 63) | 0.0015 | 1.3% |
+| K cache f16 → q8_0 | 0.0035 | 2.0% |
+| V cache f16 → q8_0 | 0.0016 | 2.0% |
+| K + V | 0.0038 | 3.0% |
+| ubatch + K, ubatch + V, all three | same as without ubatch, to every digit | |
+
+On its own, the batch split moves this model about as far as a q8_0 V cache. Once either
+cache is quantized, the split adds nothing measurable. A q8_0 KV cache (0.0038) moves this
+model further than quantizing its weights from BF16 to Q8_0 (0.0022). Flash attention is not
+in the table: on this CPU build `auto` resolves to on, and heterodyne checks what actually ran
+before treating it as a setting.
+
+**llama.cpp's CPU path is not batch-invariant at every ubatch size.** Q4_K_M, one 128-token
+chunk, all positions counted, flash attention off; A in one ubatch vs B in ubatches of:
+
+| ubatch | 8 | 16 | 32 | 56 | 60 | 62 | 63 | 64 | 65 | 96 | 100 | 127 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| top-1 changed | 0 | 0 | 0 | 0 | 0 | 3.1% | 4.7% | 0 | 4.7% | 0 | 0 | 0 |
+| KL exactly 0 | yes | yes | yes | yes | yes | no | no | yes | no | yes | yes | no |
+
+In this setup, splits whose ubatches are all multiples of 4 rows are bitwise identical and the
+others are not. The code explains it for K-quants: the repacked matmul quantizes activation
+rows in interleaved groups of 4 and sends the remainder through a separate path
+(`ggml/src/ggml-cpu/repack.cpp:4697-4702`). With flash attention off, Q8_0 and BF16 stay exact
+at ubatch 63; with it on, every weight type changes (Q4_K_M: 15.6% of top-1 tokens), so the
+flash-attention path has its own size dependence. Stock `llama-perplexity` agrees (Q4_K_M,
+ubatch 57 vs 114: KLD 0.0057, 97.4% same top token). This is why heterodyne's numerical floor
+uses an odd split and records it.
