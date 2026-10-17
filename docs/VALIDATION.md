@@ -136,8 +136,13 @@ Every experiment file in `examples/` was re-run with `heterodyne verify <file> -
 been rewritten as compact JSON. All 8 came back `exact` with the integrity checksum intact:
 per-token KL, floor, layer maps and both transplant directions, a maximum absolute
 difference of 0 in every array and no top-1 changes. The longest (BF16 vs Q4_K_M with
-transplants at all 28 layers) re-ran 708 passes. Replay on a different CPU has not been
-measured.
+transplants at all 28 layers) re-ran 708 passes.
+
+Across builds: the v0.1.0 release binary for Windows (built by CI with the portable
+x86-64-v3 flags, so `llama_print_system_info()` reports a different feature set) also
+replays `examples/qwen3-ladder-Q4_K_M.json`, recorded with a native build, as `exact` on the
+same machine. `verify` flags the build and CPU-feature differences and still finds every
+number identical. Replay on a different CPU has not been measured.
 
 ## 8. Not validated
 
