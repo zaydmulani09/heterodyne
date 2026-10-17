@@ -244,3 +244,14 @@ function renderEmpty(note) {
       recipe("Where do the answers fork?", "Both arms answer a prompt greedily; see the first token where they disagree.", () => { setKind("generate"); $("#text").value = "A train leaves at 14:35 and the trip takes 2 hours and 50 minutes. When does it arrive? Answer briefly."; $("#repair").checked = true; })),
     h("p", { class: "hint" }, "Everything runs on this machine on the CPU. Nothing is uploaded.")));
 }
+
+// ---------- experiment view ----------
+function showExperiment(e, file) {
+  if (!e || e.schema !== "heterodyne/experiment@1") { renderError("That file is not a heterodyne experiment (schema heterodyne/experiment@1)."); return; }
+  S.exp = e; S.file = file; S.chunk = 0; S.dirty = false;
+  fillForm(e.request);
+  history.replaceState(null, "", file ? `#file=${encodeURIComponent(file)}` : location.pathname);
+  S.sel = argmaxKL(e.results.chunks[0]);
+  if (S.state) renderHistory();
+  render();
+}
