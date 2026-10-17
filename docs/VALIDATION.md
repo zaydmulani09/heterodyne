@@ -35,3 +35,21 @@ implementation (agreement within 1e-12 absolute + 1e-9 relative over 5,000-token
 vocabularies), an analytic two-token case, logit-shift invariance, and exact zero on
 identical rows. The interval code is checked against the classic t-interval it must reduce to
 when chunks are equal in size.
+
+## 2. Disproof experiment on a real quant pair (manual, before any product code)
+
+Qwen3-0.6B, ggml-org BF16 GGUF vs unsloth Q4_K_M, 242 tokens of mixed text, one ubatch,
+flash attention off:
+
+- capture callback on vs off: logits **bitwise identical**
+- variant self-patch at layer 14: **bitwise identical**
+- zeroing layer 14 in the variant: mean KL 10.15 (writes reach downstream)
+- baseline: mean KL 0.1336, top-1 agreement 85.5%
+- transplanting the BF16 residual into Q4_K_M after layer l (mean KL left):
+  0.132 (l=0), 0.111 (2), 0.085 (8), 0.074 (11), 0.067 (15), 0.052 (18), 0.040 (22),
+  0.035 (26), **0.0012 (27)**
+
+The curve falls steadily, not in one step. In this model and on this text, Q4_K_M's
+divergence builds up across many layers rather than coming from one. What is left after
+the final layer (0.0012) is the quantized output head's own contribution. This is one
+text and one model; it is an observation, not a law.
