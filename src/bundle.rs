@@ -123,3 +123,20 @@ pub fn provenance(models: &mut Models, req: &Request) -> Result<Provenance, Stri
         b: model_id(models, &req.b.model)?,
     })
 }
+
+/// An unkeyed checksum: it detects edits and corruption, it is not a signature.
+/// Model *locations* are left out (moving a file must not invalidate an experiment); everything
+/// else in the request, the provenance (model hashes, llama.cpp build, CPU features) and the
+/// results is in.
+pub fn integrity(req: &Request, prov: &Provenance, res: &Results) -> String {
+    let (mut req, mut prov) = (req.clone(), prov.clone());
+    req.a.model.clear();
+    req.b.model.clear();
+    prov.a.path.clear();
+    prov.b.path.clear();
+    let mut h = Sha256::new();
+    h.update(serde_json::to_vec(&req).unwrap());
+    h.update(serde_json::to_vec(&prov).unwrap());
+    h.update(serde_json::to_vec(res).unwrap());
+    hex(&h.finalize())
+}
