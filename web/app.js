@@ -608,3 +608,14 @@ function provenancePanel() {
       h("dt", {}, "integrity"), h("dd", {}, e.integrity),
       h("dt", {}, "replay"), h("dd", {}, "Re-running on the same machine and build reproduced every number exactly in heterodyne's tests. Other CPUs or llama.cpp builds can take different kernel paths; use Verify to see by how much.")));
 }
+
+function showVerify(r) {
+  if (!S.exp) return renderEmpty();
+  render();
+  const ok = r.outcome === "exact" && r.integrity_ok;
+  const box = h("div", { class: ok ? "warning" : "error", style: ok ? "border-left-color:var(--ok)" : null },
+    h("strong", {}, ok ? "Verified: re-running reproduced every number exactly." : `Verification: ${r.outcome}${r.integrity_ok ? "" : ", integrity check failed"}`),
+    !ok && h("p", {}, `${r.top1_changes} positions changed their top token. Largest absolute difference: ${Object.entries(r.max_abs_diff || { kl: r.max_abs_kl_diff }).map(([k, v]) => `${k} ${fmtKL(v)}`).join(", ")}.`),
+    r.notes.map((n) => h("p", {}, n)));
+  main.prepend(box);
+}
