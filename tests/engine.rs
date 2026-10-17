@@ -256,3 +256,14 @@ fn incompatible_cache_type_is_an_error_not_an_abort() {
     let e = m.eval(&Cfg { type_k: 8, ..cfg() }, &toks(&m), &mut []).unwrap_err();
     assert!(e.contains("divisible by 32"), "{e}");
 }
+
+#[test]
+fn greedy_generation_is_deterministic() {
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let prompt = m.tokenize("Once upon a time", true).unwrap();
+    let g1 = m.generate(&cfg(), &prompt, 24).unwrap();
+    let g2 = m.generate(&cfg(), &prompt, 24).unwrap();
+    assert!(!g1.is_empty());
+    assert_eq!(g1, g2);
+}
