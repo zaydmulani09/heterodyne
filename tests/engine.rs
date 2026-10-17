@@ -116,10 +116,12 @@ fn multi_ubatch_capture_fills_every_row() {
     let (_, whole) = capture(&m, &cfg(), &t);
     let (_, split) = capture(&m, &Cfg { n_ubatch: 7, ..cfg() }, &t);
     let w = m.info.n_embd;
+    // A row placed at the wrong offset would differ by O(1). Different ubatch sizes take
+    // different kernels, so small differences are expected: up to ~1e-3 on Apple silicon.
     for l in 0..m.info.n_layer {
         for (i, (ra, rb)) in whole[l].chunks(w).zip(split[l].chunks(w)).enumerate() {
             let err = heterodyne::stats::rel_err_rows(ra, rb, w)[0];
-            assert!(err < 1e-3, "layer {l} row {i}: rel err {err} between ubatch splits");
+            assert!(err < 1e-2, "layer {l} row {i}: rel err {err} between ubatch splits");
         }
     }
 }
