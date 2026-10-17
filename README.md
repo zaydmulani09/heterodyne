@@ -243,3 +243,16 @@ minute, including hashing both files.
 - **Generation forks** come from incremental decoding, while scoring re-runs the sequence in
   one batch; the two can disagree, and the UI says when they do.
 - llama.cpp is pinned (b11696). Newer graph changes could rename tensors.
+
+## Build from source
+
+```bash
+git clone --recursive https://github.com/zaydmulani09/heterodyne
+cd heterodyne
+cargo build --release
+./target/release/heterodyne serve --models /path/to/ggufs
+```
+
+Requires Rust, CMake and a C++17 compiler (Windows: MSVC toolchain and the Visual Studio
+Build Tools). The first build compiles llama.cpp. `HETERODYNE_PORTABLE=1` builds for
+x86-64-v3 instead of the build machine. See [CONTRIBUTING.md](CONTRIBUTING.md) for tests.
