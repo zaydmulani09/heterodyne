@@ -74,3 +74,11 @@ function errScale(rows) {
   const hi = Math.ceil(Math.log10(mx) * 2) / 2, lo = Math.max(hi - 5, Math.floor(Math.log10(mn) * 2) / 2);
   return { t: (e) => (e <= 0 ? 0 : (Math.log10(e) - lo) / (hi - lo)), lo, hi };
 }
+const sup = (x) => `1e${x}`;
+function rampCss() {
+  const st = dark() ? RAMP_D : RAMP_L;
+  return `linear-gradient(90deg, ${st.join(",")})`;
+}
+
+// ---------- setup form ----------
+const ARM_FIELDS = ["ctk", "ctv", "fa", "ub", "threads"];
