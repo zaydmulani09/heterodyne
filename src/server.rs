@@ -347,3 +347,32 @@ where
         }
     });
 }
+
+#[derive(Deserialize)]
+struct RunBody {
+    request: Request,
+    #[serde(default)]
+    notes: Notes,
+}
+
+fn start_run(st: &mut State, body: &str) -> Resp {
+    let rb: RunBody = match serde_json::from_str(body) {
+        Ok(r) => r,
+        Err(e) => return err(400, &format!("bad request: {e}")),
+    };
+    if let Err(e) = rb.request.validate() {
+        return err(400, &e);
+    }
+    let (id, cancel) = match new_job(st, "run") {
+        Ok(x) => x,
+        Err(r) => return r,
+    };
+    let ws = st.workspace.clone();
+    spawn(st, id, move |models, progress| {
+        let e = bundle::record(rb.request, rb.notes, models, &cancel, progress)?;
+        // Saved as soon as it finishes, so a closed tab or reload loses nothing.
+        let file = bundle::save_to(&ws, &e)?;
+        Ok(json!({ "experiment": e, "file": file }))
+    });
+    ok(json!({ "job": id }))
+}
