@@ -69,3 +69,36 @@ variant, before heterodyne existed. These motivated the "arm = file + settings" 
 The thread-count row is not zero only because llama-perplexity stores its base logits as
 16-bit compressed log-probs; that storage alone produces 0.11% "flips". heterodyne keeps
 f32 logits in memory and computes KL in f64, so identical runs give exactly 0 (test above).
+
+## 4. Batch invariance of llama.cpp's CPU path (heterodyne, cross-checked with llama-perplexity)
+
+Qwen3-0.6B, 128-token chunk of `examples/corpus.txt`; A = whole chunk in one ubatch,
+B = same file and settings with the given ubatch (`--b-set ub=N`):
+
+- Q4_K_M, flash attention off: KL is **exactly 0** for ubatch 8, 16, 24, 32, 40, 48, 56, 60,
+  64, 96, 100, and non-zero for 62, 63, 65, 127 (up to 4.7% top-1 changes, all near-ties).
+- ubatch 63 vs 64, flash attention off / on:
+
+  | weights | 63, fa off | 63, fa on | 64, fa off | 64, fa on |
+  |---|---|---|---|---|
+  | BF16 | 0 | 1.5e-4 (0.8%) | 0 | 0 |
+  | Q8_0 | 0 | 2.4e-3 (2.3%) | 0 | 0 |
+  | Q3_K_M | 5.9e-3 (1.6%) | 1.9e-2 (5.5%) | 0 | 0 |
+  | Q4_K_M | 7.3e-3 (4.7%) | 1.9e-2 (15.6%) | 0 | 0 |
+
+  (mean KL, top-1 changed)
+- Independent check with stock `llama-perplexity` (same build), Q4_K_M, `-c 114`, base
+  `-ub 114` vs `-ub 57`: mean KLD 0.0057, same top token 97.4%. With `-c 128`, `-ub 128` vs
+  `-ub 64`: KLD ≈ 0, same top token 100%.
+
+So the effect is in llama.cpp, not in heterodyne's hook. For the K-quants the code shows the
+mechanism: the repacked matmul quantizes activation rows in interleaved groups of 4 and sends
+the remainder rows through a separate `from_float` path
+(`ggml/src/ggml-cpu/repack.cpp:4697-4702` at b11696), so a ubatch that is not a multiple of 4
+puts some rows through different arithmetic. Why every weight type changes with flash
+attention on was not traced in the kernel code.
+
+These results are for Qwen3-0.6B, 128-token chunks, on this CPU. Divisibility by 4 is not a
+general rule: with flash attention on, an earlier run with 256-token chunks saw a small
+difference (mean KL 1.3e-5) at ubatch 64, coming from a 76-token final chunk split 64 + 12,
+so the flash-attention path has size dependence of its own.
