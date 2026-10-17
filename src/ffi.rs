@@ -70,3 +70,13 @@ extern "C" {
     fn hd_flash_attn_used(m: *mut c_void, cfg: *const Cfg, tok: i32, err: *mut c_char, errlen: i32) -> i32;
     fn hd_quantize(input: *const c_char, output: *const c_char, ftype: i32, nthread: i32) -> i32;
 }
+
+const ERRLEN: usize = 8192;
+
+fn err_string(buf: &[c_char]) -> String {
+    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
+}
+
+fn cstr(s: &str) -> Result<CString, String> {
+    CString::new(s).map_err(|_| "string contains a NUL byte".to_string())
+}
