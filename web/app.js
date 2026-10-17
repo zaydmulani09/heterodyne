@@ -396,3 +396,26 @@ function stripChart(c) {
   svg.addEventListener("click", (ev) => { const i = hit(ev); if (i >= 0 && i < n) select(i); });
   return svg;
 }
+
+function tokenView(c) {
+  // Token i+1 is what position i predicted; the first token has no prediction.
+  const box = h("div", { class: "tokens", tabindex: 0, role: "listbox", "aria-label": "Tokens; arrow keys move the selection" });
+  box.append(h("span", { class: "first" }, tok(c.tokens[0])));
+  for (let i = 0; i < c.pos.length; i++) {
+    const p = c.pos[i];
+    const has = i + 1 < c.tokens.length;
+    const txt = has ? tok(c.tokens[i + 1]) : " ⟂";
+    const cls = [p.top_a !== p.top_b && "flip", p.top_a !== p.top_b && gap(p) < 0.25 && "tie", i === S.sel && "sel", i < skipN() && "unscored"].filter(Boolean).join(" ");
+    const bg = ramp(klT(p.kl));
+    const span = h("span", { class: cls, "data-i": i, style: `background:${bg};color:${inkOn(bg)}`, title: has ? null : "prediction after the last token", role: "option", "aria-selected": String(i === S.sel) });
+    const parts = txt.split("\n");
+    parts.forEach((part, k) => { if (k) span.append(h("span", { class: "nl" }, "↵"), "\n"); span.append(part); });
+    box.append(span);
+  }
+  box.addEventListener("click", (ev) => { const t = ev.target.closest("[data-i]"); if (t) select(+t.dataset.i); });
+  box.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowRight") { ev.preventDefault(); select(S.sel + 1); $(".tokens").focus(); }
+    if (ev.key === "ArrowLeft") { ev.preventDefault(); select(S.sel - 1); $(".tokens").focus(); }
+  });
+  return box;
+}
