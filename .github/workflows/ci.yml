@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: fetch test model (stories260K, 1.2 MB, ggml-org/models)
+        shell: bash
+        run: |
+          mkdir -p tests/fixtures
+          curl -sSfL -o tests/fixtures/stories260K.gguf \
+            https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
+      - name: fmt
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo fmt --check
+      - name: test
+        env:
+          HETERODYNE_REQUIRE_FIXTURE: "1"
+          HETERODYNE_PORTABLE: "1"
+        run: cargo test --release -- --test-threads=1
+      - name: cli smoke test
+        shell: bash
+        env:
+          HETERODYNE_PORTABLE: "1"
+        run: |
+          cargo run --release -q -- diff --a tests/fixtures/stories260K.gguf --b-set ctk=bf16 \
+            --text "Once upon a time there was a little dog who liked to run in the park." \
+            --repair -o smoke.json
+          cargo run --release -q -- verify smoke.json
