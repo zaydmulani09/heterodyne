@@ -192,3 +192,16 @@ section.panel > header .hint { margin: 0; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
 .verdict { margin-top: 0.6rem; font-size: 0.82rem; padding-top: 0.5rem; border-top: 1px solid var(--rule); }
+
+/* Plots */
+.plot { width: 100%; max-width: 100%; display: block; background: var(--panel); border: 1px solid var(--rule); }
+canvas.plot { image-rendering: pixelated; cursor: crosshair; }
+svg.plot { overflow: visible; height: auto; }
+svg .grid line { stroke: var(--grid); stroke-width: 1; }
+svg .axis text, .axis-label { font-size: 10.5px; fill: var(--muted); font-family: var(--font); font-stretch: 85%; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; align-items: center; }
+.legend .ramp { width: 120px; height: 8px; display: inline-block; vertical-align: middle; border: 1px solid var(--rule); }
+.legend .key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend .sw { width: 14px; height: 2px; display: inline-block; }
+.heat-wrap { position: relative; }
+.heat-y { font-size: 0.74rem; color: var(--muted); margin-bottom: 0.15rem; }
