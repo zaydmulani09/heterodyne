@@ -161,3 +161,11 @@ fn percent_decode(s: &str) -> String {
     }
     String::from_utf8_lossy(&out).into_owned()
 }
+
+fn query(url: &str, key: &str) -> Option<String> {
+    let q = url.split_once('?')?.1;
+    q.split('&').find_map(|kv| {
+        let (k, v) = kv.split_once('=')?;
+        (k == key).then(|| percent_decode(v))
+    })
+}
