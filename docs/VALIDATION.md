@@ -138,3 +138,13 @@ per-token KL, floor, layer maps and both transplant directions, a maximum absolu
 difference of 0 in every array and no top-1 changes. The longest (BF16 vs Q4_K_M with
 transplants at all 28 layers) re-ran 708 passes. Replay on a different CPU has not been
 measured.
+
+## 8. Not validated
+
+- GPU backends (CUDA, Metal, Vulkan, SYCL). The build disables them.
+- Architectures other than llama (stories260K), qwen2 (Qwen2.5-0.5B) and qwen3 (Qwen3-0.6B). The layer map and
+  transplants need `l_out-<layer>` in the graph; heterodyne reports an error when a layer's
+  tensor is missing, but other architectures have not been run.
+- Mixture-of-experts, recurrent and hybrid models.
+- Cross-machine replay. `verify` on the same machine is exact; on a CPU with different SIMD
+  paths, low-order bits are expected to differ, and that has not been measured.
