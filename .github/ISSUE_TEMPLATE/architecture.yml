@@ -1,0 +1,23 @@
+name: Architecture report
+description: You ran heterodyne on a model family not yet in the supported table.
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Hugging Face repo and GGUF file names for both arms.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Engine test output
+      description: "`HETERODYNE_TEST_MODEL=path/to/model.gguf cargo test --release --test engine -- --test-threads=1`"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything odd
+      description: Missing l_out tensors, errors, suspicious numbers.

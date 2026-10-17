@@ -1,0 +1,28 @@
+name: Bug or wrong number
+description: Something crashed, or a measurement looks wrong.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: Output of `heterodyne verify <experiment.json>`
+      description: If you saved an experiment, re-run it and paste the report. Attach the JSON if you can share it.
+      render: json
+  - type: input
+    id: models
+    attributes:
+      label: Model files
+      description: Hugging Face repo and file names (e.g. unsloth/Qwen3-0.6B-GGUF Qwen3-0.6B-Q4_K_M.gguf).
+  - type: input
+    id: system
+    attributes:
+      label: OS, CPU, heterodyne version
+      description: "`heterodyne --version` and the CPU model."
+    validations:
+      required: true
