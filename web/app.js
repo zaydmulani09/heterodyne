@@ -263,3 +263,47 @@ function argmaxKL(c) {
   return b;
 }
 const skipN = () => (S.exp && S.exp.request.skip_first) || 0;
+
+function render() {
+  const e = S.exp, r = e.results, sm = r.summary, req = e.request, pv = e.provenance;
+  const ran = (k) => (r.flash_attn_used && req[k].flash_attn === "auto" ? ` (ran ${r.flash_attn_used[k === "a" ? 0 : 1] ? "on" : "off"})` : "");
+  const settings = (k) => { const a = req[k]; return `K ${a.cache_k}, V ${a.cache_v}, flash attn ${a.flash_attn}${ran(k)}, ubatch ${a.ubatch || "whole chunk"}, ${a.threads} threads`; };
+  const head = h("div", {},
+    h("div", { class: "head" }, h("h1", {}, e.notes.title || `${pv.a.file_name} vs ${pv.b.file_name}`)),
+    h("div", { class: "arms" },
+      h("span", { class: "who" }, h("span", { class: "pen a" }), "A"), h("span", { class: "what" }, h("b", {}, pv.a.file_name), ` ${pv.a.desc}; ${settings("a")}`),
+      h("span", { class: "who" }, h("span", { class: "pen b" }), "B"), h("span", { class: "what" }, h("b", {}, pv.b.file_name), ` ${pv.b.desc}; ${settings("b")}`)),
+    r.warnings.map((w) => h("div", { class: "warning" }, w)));
+
+  const fl = r.floor;
+  const splits = [...new Set(r.chunks.map((c) => c.floor_ubatch).filter(Boolean))].join(", ");
+  const nch = sm.n_chunks || r.chunks.length;
+  const ciNote = !sm.mean_kl_ci95 ? "one chunk: no interval" : `95% t-interval over ${nch} chunks: ${fmtKL(sm.mean_kl_ci95[0])} to ${fmtKL(sm.mean_kl_ci95[1])}${nch < 5 ? " (few chunks, approximate)" : ""}`;
+  const readout = h("dl", { class: "readout" },
+    cell("Mean KL(A‖B), nats", fmtKL(sm.mean_kl), ciNote),
+    cell("Top-1 changed", pct(sm.flip_rate), `${sm.flips} of ${sm.n_positions}; ${sm.flips_near_tie} near-tie, ${sm.flips_confident} confident`),
+    cell("Perplexity A / B", sm.ppl_a != null ? `${sm.ppl_a.toFixed(3)} / ${sm.ppl_b.toFixed(3)}` : "–", "on the scored text"),
+    fl && cell("Numerical floor", fmtKL(fl.mean_kl), `A re-run${splits ? ` with ubatch ${splits}` : " with another ubatch split"}; ${pct(fl.flip_rate)} top-1 changed`),
+    cell("Max KL", fmtKL(sm.max_kl), `p99 ${fmtKL(sm.p99_kl)}, median ${fmtKL(sm.median_kl)}`),
+    cell("Scored", `${sm.n_positions} positions`, `${r.chunks.length} chunk${r.chunks.length > 1 ? "s" : ""}${req.skip_first ? `; first ${req.skip_first} of each not counted` : ""}; ${(e.elapsed_ms / 1000).toFixed(1)} s`));
+
+  const tabs = r.chunks.length > 1 && h("div", { class: "tabs", role: "tablist" }, r.chunks.map((c, i) =>
+    h("button", { type: "button", role: "tab", "aria-selected": String(i === S.chunk), onclick: () => { S.chunk = i; S.sel = argmaxKL(c); render(); } }, `Chunk ${i + 1}`)));
+
+  const c = r.chunks[S.chunk];
+  const left = h("div", {},
+    panel("Divergence per token", `KL(A‖B) at each position, log scale. ${c.floor_kl ? `Grey line: the numerical floor, arm A against itself re-run${c.floor_ubatch ? ` with ubatch ${c.floor_ubatch}` : " with a different ubatch"}. ` : ""}Triangles mark positions where B's top token differs from A's; hollow ones were near-ties for A.`, stripChart(c)),
+    panel("Text, coloured by divergence", "Each token is coloured by how differently the arms predicted it. Click a token, or use the arrow keys, to inspect it.", tokenView(c), legendKL()),
+    c.layer_err && (() => {
+      const es = errScale(c.layer_err);
+      return panel("Where it appears inside the network", "Relative difference of the residual stream ‖h_B − h_A‖ / ‖h_A‖ after each layer (rows, first layer at the bottom) at each position (columns). This is correlation, not cause: depth amplifies small differences.", heat(c.layer_err, es.t, (l, i, v) => `layer ${l}, pos ${i}\nrel. diff ${v.toExponential(2)}`), legendErr(es));
+    })(),
+    c.repair_denoise && panel("Restoring A's activations, layer by layer", "Intervention. Row l: B runs with A's residual stream written in after layer l; colour is the divergence from A that remains. A row that goes light means everything that differs was already in the residual stream by that depth; what is left comes from later layers.", heat(c.repair_denoise, klT, (l, i, v) => `B + A's residual after layer ${l}, pos ${i}\nKL left ${fmtKL(v)}`, c.repair_layers), legendKL()),
+    c.repair_noise && panel("Injecting B's activations, layer by layer", "Intervention. Row l: A runs with B's residual stream written in after layer l; colour is how far that pushes A away from itself. Dark rows mark depths where B's difference, carried forward through A's own later layers, already reaches the output.", heat(c.repair_noise, klT, (l, i, v) => `A + B's residual after layer ${l}, pos ${i}\nKL ${fmtKL(v)}`, c.repair_layers), legendKL()),
+    r.attribution && attributionPanel(r.attribution),
+    r.generation && generationPanel(r.generation, c));
+  const work = h("div", { class: "work" }, left, inspector(c));
+  const keep = $(".tokens")?.scrollTop;
+  main.replaceChildren(head, readout, tabs || "", work, notesPanel(), provenancePanel());
+  if (keep != null) $(".tokens").scrollTop = keep;
+}
