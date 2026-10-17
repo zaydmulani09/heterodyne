@@ -166,3 +166,18 @@ at ubatch 63; with it on, every weight type changes (Q4_K_M: 15.6% of top-1 toke
 flash-attention path has its own size dependence. Stock `llama-perplexity` agrees (Q4_K_M,
 ubatch 57 vs 114: KLD 0.0057, 97.4% same top token). This is why heterodyne's numerical floor
 uses an odd split and records it.
+
+## Reading the results
+
+| what you see | what it is | what it is not |
+|---|---|---|
+| KL(A‖B) per token | how much of A's next-token distribution B fails to reproduce, in nats, exact over the full vocabulary | a quality score: B can diverge and still be right |
+| numerical floor | the same comparison for A against itself, re-run with odd-sized ubatches that change kernel paths and summation order | a bound on noise; it is one reference perturbation |
+| near-tie / confident flips | top-1 changes where A rated B's choice within 0.25 nats / at least 1 nat below its own | evidence on its own; the thresholds are conventions |
+| layer map | ‖h_B − h_A‖ / ‖h_A‖ of the residual stream after each layer | a cause: differences propagate whether or not they matter |
+| transplant curves | B re-run with A's residual written in after layer l (and the reverse); the KL that results | a general law: it holds for the text you ran |
+| attribution table | every subset of differing settings switched to B's value and scored | an additive decomposition: interactions are shown, not split |
+| interval | 95% t-interval over chunks, positions within a chunk treated as correlated | exact with few chunks; with fewer than 5 it is flagged as approximate |
+
+Each experiment file stores your hypothesis and interpretation next to the measurements,
+outside the integrity checksum: interpretation is not evidence.
