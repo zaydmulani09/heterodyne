@@ -237,3 +237,29 @@ pub struct Cell {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Attribution {
+    pub factors: Vec<String>,
+    pub cells: Vec<Cell>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Results {
+    pub summary: Summary,
+    pub floor: Option<Summary>,
+    /// Per layer, mean over all positions.
+    pub layer_err_mean: Option<Vec<f32>>,
+    pub repair_layers: Option<Vec<usize>>,
+    pub repair_denoise_mean: Option<Vec<f32>>,
+    pub repair_noise_mean: Option<Vec<f32>>,
+    pub chunks: Vec<Chunk>,
+    pub generation: Option<Generation>,
+    pub attribution: Option<Attribution>,
+    /// Whether each arm's graph actually used flash attention ("auto" resolved by llama.cpp).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_attn_used: Option<[bool; 2]>,
+    /// Text for every token id that appears in the results.
+    pub vocab: BTreeMap<i32, String>,
+    pub warnings: Vec<String>,
+}
