@@ -103,3 +103,11 @@ pub struct Model {
 }
 
 unsafe impl Send for Model {}
+unsafe impl Sync for Model {}
+
+/// One named activation to read and/or overwrite during `eval`.
+pub struct Hook<'a> {
+    pub name: String,
+    pub capture: Option<&'a mut [f32]>,
+    pub patch: Option<&'a [f32]>,
+}
