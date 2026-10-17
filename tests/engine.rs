@@ -195,6 +195,28 @@ fn quantized_variant_diverges_and_transplant_repairs_it() {
 }
 
 #[test]
+fn a_k_cache_difference_lands_entirely_in_attention() {
+    // B differs from A only in its K cache, which only attention reads. Once A's residual after a
+    // layer's attention is written in, that layer's MLP computes exactly what A's did, so the
+    // post-attention and post-layer transplants must agree bit for bit: every MLP share is 0.
+    let Some(p) = fixture() else { return };
+    let p = p.to_string_lossy().into_owned();
+    let mut req = request(&p, &p);
+    req.b.cache_k = "bf16".into();
+    req.components = true;
+    let r = analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap();
+    assert!(r.summary.mean_kl > 0.0, "bf16 K cache changed nothing; the test would prove nothing");
+    assert!(!r.warnings.iter().any(|w| w.contains("attention/MLP")), "{:?}", r.warnings);
+    for c in &r.chunks {
+        assert!(c.repair_mid_denoise.is_some() && c.repair_mid_denoise == c.repair_denoise);
+        assert!(c.repair_mid_noise.is_some() && c.repair_mid_noise == c.repair_noise);
+    }
+    assert_eq!(r.repair_mid_denoise_mean, r.repair_denoise_mean);
+    // Restoring A's final residual leaves nothing, so the attention blocks account for all of it.
+    assert_eq!(*r.repair_denoise_mean.unwrap().last().unwrap(), 0.0);
+}
+
+#[test]
 fn floor_stride_and_attribution_are_consistent() {
     let Some(p) = fixture() else { return };
     let p = p.to_string_lossy().into_owned();
