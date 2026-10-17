@@ -95,3 +95,15 @@ fn last_layer_transplant_restores_reference_when_weights_match() {
     let last = m.info.n_layer - 1;
     assert!(patch(&m, &b, &t, last, &caps[last]) == la);
 }
+
+#[test]
+fn self_patch_is_identity_across_ubatches() {
+    // Writes land in the right rows when a chunk is computed in several ubatches.
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let t = toks(&m);
+    let c = Cfg { n_ubatch: 7, ..cfg() };
+    let (base, caps) = capture(&m, &c, &t);
+    let mid = m.info.n_layer / 2;
+    assert!(patch(&m, &c, &t, mid, &caps[mid]) == base);
+}
