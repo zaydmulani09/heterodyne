@@ -42,3 +42,43 @@ The research behind this choice, with sources, is in [docs/DECISION.md](docs/DEC
 | [jlens-gguf](https://github.com/igorbarshteyn/jlens-gguf) | one model | yes (Jacobian lens) | steering, single model | yes | CPU (llama.cpp) |
 | [Thireus GGUF-Tool-Suite](https://github.com/Thireus/GGUF-Tool-Suite) | no | per-tensor PPL/KLD sweeps | requantize per tensor | yes (ik_llama.cpp) | llama.cpp backends |
 | **heterodyne** | **yes, A vs B** | **yes, A vs B** | **cross-arm transplants** | **yes** | **CPU (llama.cpp)** |
+
+## Quick start
+
+Download a binary from [Releases](https://github.com/zaydmulani09/heterodyne/releases)
+(Linux x86-64, Windows x86-64, macOS arm64), or [build from source](#build-from-source).
+
+```bash
+heterodyne serve --models ~/models
+```
+
+That opens `http://127.0.0.1:7878/`. Pick two GGUF files (or one file and two settings),
+paste some text, and run. Every finished run is saved to `~/.heterodyne/experiments`.
+
+You need two GGUFs of the same model with the same tokenizer, for example from
+[ggml-org/Qwen3-0.6B-GGUF](https://huggingface.co/ggml-org/Qwen3-0.6B-GGUF) (BF16) and
+[unsloth/Qwen3-0.6B-GGUF](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF) (quants).
+
+### Command line
+
+```bash
+# How far is Q4_K_M from BF16 on my text, and which layers carry the difference?
+heterodyne diff --a Qwen3-0.6B-BF16.gguf --b Qwen3-0.6B-Q4_K_M.gguf \
+  --text-file examples/corpus.txt --chunk 128 --max-chunks 12 --repair -o bf16-vs-q4km.json
+
+# Same file twice: what do a q8_0 KV cache and a different batch split change, and which is it?
+heterodyne diff --a Qwen3-0.6B-Q8_0.gguf --b-set ctk=q8_0,ctv=q8_0,ub=63 \
+  --text-file examples/corpus.txt --chunk 128 --max-chunks 12 --attribution
+
+# Where do the greedy answers fork?
+heterodyne diff --a Qwen3-0.6B-BF16.gguf --b Qwen3-0.6B-Q3_K_M.gguf \
+  --prompt "A train leaves at 14:35 and the trip takes 2 hours and 50 minutes. When does it arrive?"
+
+# Re-run a saved experiment and compare every number
+heterodyne verify bf16-vs-q4km.json --search ~/models
+```
+
+Arm settings: `ctk`/`ctv` (KV cache type: f32, f16, bf16, q8_0, q5_1, q5_0, q4_1, q4_0,
+iq4_nl), `fa` (flash attention: auto, on, off), `ub` (ubatch size, 0 = whole chunk),
+`threads`. `--b-set` starts from A's settings; `--b` defaults to A's file. `--skip-first`
+(default 16) sets how many leading tokens of each chunk are shown but not counted.
