@@ -201,4 +201,25 @@ int32_t hd_vocab_equal(void * a, void * b) {
     return 1;
 }
 
+// Wraps one user message in the model's built-in chat template. Returns length,
+// -needed if buf is too small, or INT32_MIN if the model has no usable template.
+int32_t hd_chat(void * m, const char * user, char * buf, int32_t cap) {
+    const char * tmpl = llama_model_chat_template((llama_model *) m, nullptr);
+    if (!tmpl) return INT32_MIN;
+    llama_chat_message msg = {"user", user};
+    std::vector<char> tmp(strlen(user) * 2 + 4096);
+    int32_t n = llama_chat_apply_template(tmpl, &msg, 1, true, tmp.data(), tmp.size());
+    if (n < 0) return INT32_MIN;
+    if (n > (int32_t) tmp.size()) {
+        tmp.resize(n + 1);
+        n = llama_chat_apply_template(tmpl, &msg, 1, true, tmp.data(), tmp.size());
+    }
+    return copy_out(std::string(tmp.data(), n), buf, cap);
+}
+
+const char * hd_system_info(void) {
+    init_once();
+    return llama_print_system_info();
+}
+
 }  // extern "C"
