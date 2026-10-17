@@ -192,3 +192,17 @@ async function startRun(ev) {
   try { const { job } = await api("/api/run", body); poll(job); }
   catch (e) { renderError(e.message); }
 }
+
+function setBusy(b) { S.busy = b; $("#run").disabled = b; }
+
+async function poll(id) {
+  setBusy(true);
+  let j;
+  try { j = await api(`/api/job?id=${id}`); } catch (e) { setBusy(false); renderError(e.message); return; }
+  if (j.status === "running") { renderProgress(j, id); setTimeout(() => poll(id), 600); return; }
+  setBusy(false);
+  if (j.status === "error") renderError(j.error);
+  else if (j.status === "cancelled") renderEmpty("Cancelled. Nothing was saved.");
+  else if (j.kind === "run") { showExperiment(j.result.experiment, j.result.file); loadState().catch(() => {}); }
+  else showVerify(j.result);
+}
