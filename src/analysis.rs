@@ -24,3 +24,12 @@ pub struct Arm {
     #[serde(default = "d_f16")]
     pub cache_v: String,
 }
+
+impl Arm {
+    pub fn default_threads() -> i32 {
+        std::thread::available_parallelism().map_or(4, |n| n.get().min(8) as i32)
+    }
+}
+fn d_auto() -> String {
+    "auto".into()
+}
