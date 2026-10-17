@@ -401,3 +401,13 @@ fn start_verify(st: &mut State, body: &str) -> Resp {
     });
     ok(json!({ "job": id }))
 }
+
+fn job_json(st: &State, id: Option<u64>) -> Resp {
+    let jobs = lock(&st.jobs);
+    match id.and_then(|id| jobs.get(&id)) {
+        Some(j) => ok(
+            json!({ "status": j.status, "kind": j.kind, "done": j.done, "total": j.total, "stage": j.stage, "error": j.error, "result": j.result }),
+        ),
+        None => err(404, "no such job"),
+    }
+}
