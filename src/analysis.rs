@@ -133,6 +133,10 @@ pub struct Request {
     /// Transplant every n-th layer (the last layer is always included).
     #[serde(default = "d_one")]
     pub repair_stride: usize,
+    /// Also transplant the residual between each layer's attention and MLP blocks (`ffn_inp-<layer>`),
+    /// which splits every layer's share of the divergence into attention and MLP. Needs stride 1.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub components: bool,
     /// Factorial attribution over the settings that differ between arms.
     #[serde(default)]
     pub attribution: bool,
@@ -178,6 +182,9 @@ impl Request {
         bound("max chunks", self.max_chunks, 1, 256)?;
         bound("top_k", self.top_k, 0, 64)?;
         bound("repair stride", self.repair_stride, 1, 1024)?;
+        if self.components && !(self.repair && self.repair_stride == 1) {
+            return Err("the attention/MLP split needs a transplant at every layer: turn on transplants with stride 1".into());
+        }
         if self.skip_first + 2 > self.chunk_tokens {
             return Err(format!("unscored leading tokens ({}) must leave room in a {}-token chunk", self.skip_first, self.chunk_tokens));
         }
@@ -208,6 +215,13 @@ pub struct Chunk {
     pub repair_denoise: Option<Vec<Vec<f32>>>,
     /// [i][pos] KL(A || A with B's l_out-<repair_layers[i]> written in).
     pub repair_noise: Option<Vec<Vec<f32>>>,
+    /// [i][pos] KL(A || B with A's ffn_inp-<repair_layers[i]> written in): the residual after that
+    /// layer's attention block, before its MLP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_mid_denoise: Option<Vec<Vec<f32>>>,
+    /// [i][pos] KL(A || A with B's ffn_inp-<repair_layers[i]> written in).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_mid_noise: Option<Vec<Vec<f32>>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -253,6 +267,10 @@ pub struct Results {
     pub repair_layers: Option<Vec<usize>>,
     pub repair_denoise_mean: Option<Vec<f32>>,
     pub repair_noise_mean: Option<Vec<f32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_mid_denoise_mean: Option<Vec<f32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_mid_noise_mean: Option<Vec<f32>>,
     pub chunks: Vec<Chunk>,
     pub generation: Option<Generation>,
     pub attribution: Option<Attribution>,
@@ -329,9 +347,10 @@ fn floor_split(cfg_ubatch: i32, n: usize) -> i32 {
 }
 
 /// A per-layer tensor heterodyne hooks: graph name prefix, and what is lost when a graph lacks it.
-/// `l_out-<l>` is the residual after layer l.
+/// `l_out-<l>` is the residual after layer l; `ffn_inp-<l>` the residual between its attention and MLP.
 type Kind = (&'static str, &'static str);
 const L_OUT: Kind = ("l_out", "no layer map or transplants");
+const FFN_INP: Kind = ("ffn_inp", "no attention/MLP split");
 
 /// Logits plus every layer's tensor of each kind; kind k at layer l is buffer `k * n_layer + l`.
 fn capture_all(m: &Model, cfg: &Cfg, toks: &[i32], n_layer: usize, kinds: &[Kind]) -> Result<(Vec<f32>, Vec<Vec<f32>>), String> {
@@ -389,7 +408,11 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
         warnings.push("models differ in layer count or width: layer map and transplants disabled".into());
     }
     let (n_layer, v) = (ma.info.n_layer, ma.info.n_vocab);
-    let mut kinds: Vec<Kind> = if layers { vec![L_OUT] } else { vec![] };
+    let mut kinds: Vec<Kind> = match (layers, req.components) {
+        (false, _) => vec![],
+        (true, false) => vec![L_OUT],
+        (true, true) => vec![L_OUT, FFN_INP],
+    };
     let skip = req.skip_first;
     let check = || if cancel.load(Ordering::Relaxed) { Err("cancelled".to_string()) } else { Ok(()) };
 
@@ -553,15 +576,16 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
             let mut buf = vec![0f32; n * v];
             for &l in &repair_layers {
                 for (k, kind) in kinds.iter().enumerate() {
+                    let at = if *kind == FFN_INP { "post-attention " } else { "" };
                     let (name, i) = (format!("{}-{l}", kind.0), k * n_layer + l);
                     check()?;
                     patched(&mb, &cfg_b, toks, name.clone(), &cap_a[i], &mut buf)?;
                     den[k].push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect::<Vec<f32>>());
-                    tick("transplant A→B");
+                    tick(&format!("{at}transplant A→B"));
                     check()?;
                     patched(&ma, &cfg_a, toks, name, &cap_b[i], &mut buf)?;
                     noi[k].push(stats::kl_rows(&la, &buf, v).into_iter().map(|x| x as f32).collect::<Vec<f32>>());
-                    tick("transplant B→A");
+                    tick(&format!("{at}transplant B→A"));
                 }
             }
         }
@@ -602,6 +626,8 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
             repair_layers: (!repair_layers.is_empty()).then(|| repair_layers.clone()),
             repair_denoise: den.next(),
             repair_noise: noi.next(),
+            repair_mid_denoise: den.next(),
+            repair_mid_noise: noi.next(),
         });
     }
 
@@ -632,6 +658,8 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
     let layer_err_mean = mean_rows(&|c| c.layer_err.as_ref());
     let repair_denoise_mean = mean_rows(&|c| c.repair_denoise.as_ref());
     let repair_noise_mean = mean_rows(&|c| c.repair_noise.as_ref());
+    let repair_mid_denoise_mean = mean_rows(&|c| c.repair_mid_denoise.as_ref());
+    let repair_mid_noise_mean = mean_rows(&|c| c.repair_mid_noise.as_ref());
     let attribution = (!cells.is_empty()).then(|| {
         let mut out = vec![Cell { switched: vec![], mean_kl: 0.0, flip_rate: 0.0, error: None }];
         for (k, &mask) in cells.iter().enumerate() {
@@ -675,6 +703,8 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
         repair_layers: (!repair_layers.is_empty()).then_some(repair_layers),
         repair_denoise_mean,
         repair_noise_mean,
+        repair_mid_denoise_mean,
+        repair_mid_noise_mean,
         chunks,
         generation,
         attribution,

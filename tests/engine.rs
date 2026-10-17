@@ -138,6 +138,7 @@ fn request(a: &str, b: &str) -> Request {
         layers: true,
         repair: true,
         repair_stride: 1,
+        components: false,
         attribution: false,
         floor: true,
         top_k: 4,

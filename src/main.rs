@@ -206,6 +206,7 @@ fn real_main() -> Result<(), String> {
                 layers: !no_layers,
                 repair,
                 repair_stride,
+                components: false,
                 attribution,
                 floor: !no_floor,
                 top_k,
