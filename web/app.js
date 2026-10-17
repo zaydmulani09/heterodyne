@@ -555,3 +555,43 @@ function generationPanel(g, c) {
     h("div", { class: "gen" }, col("ga", "A answered", g.a, g.b), col("gb", "B answered", g.b, g.a)),
     forkAt != null && forkAt < c.pos.length && h("div", { class: "actions" }, h("button", { class: "quiet", type: "button", onclick: () => select(forkAt) }, "Inspect the fork")));
 }
+
+function notesPanel() {
+  const e = S.exp;
+  const status = h("span", { class: "status" }, S.file ? `Saved as ${S.file}` : "Not saved yet");
+  const title = h("input", { type: "text", value: e.notes.title, oninput: (ev) => { e.notes.title = ev.target.value; S.dirty = true; } });
+  const hyp = h("textarea", { oninput: (ev) => { e.notes.hypothesis = ev.target.value; S.dirty = true; } }, e.notes.hypothesis);
+  const interp = h("textarea", { placeholder: "What do you conclude, and what would change your mind?", oninput: (ev) => { e.notes.interpretation = ev.target.value; S.dirty = true; } }, e.notes.interpretation);
+  const save = async () => {
+    try {
+      const r = await api("/api/save", e);
+      S.file = r.file; S.dirty = false;
+      await loadState();
+      status.textContent = `Saved as ${r.file}`; status.className = "status ok";
+    } catch (err) { status.textContent = err.message; status.className = "status bad"; }
+  };
+  const download = () => {
+    // Share file names, not your folder layout. Paths are outside the integrity hash; sha256 pins the files.
+    const out = structuredClone(e);
+    for (const k of ["a", "b"]) { out.request[k].model = short(out.request[k].model); out.provenance[k].path = short(out.provenance[k].path); }
+    const blob = new Blob([JSON.stringify(out)], { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: (S.file || `heterodyne-${e.created_unix}.json`) });
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+  const verify = async () => {
+    if (!S.file || S.dirty) await save();
+    if (!S.file) return;
+    try { const { job } = await api("/api/verify", { file: S.file }); poll(job); }
+    catch (err) { status.textContent = err.message; status.className = "status bad"; }
+  };
+  return h("section", { class: "panel notes" }, h("header", {}, h("h2", {}, "Notes")),
+    h("p", { class: "explain" }, "Your words are stored next to the measurements but kept out of the integrity hash: interpretation is not evidence."),
+    h("label", {}, "Title"), title,
+    h("label", {}, "Hypothesis"), hyp,
+    h("label", {}, "Interpretation"), interp,
+    h("div", { class: "actions" },
+      h("button", { type: "button", onclick: save }, "Save to workspace"),
+      h("button", { class: "quiet", type: "button", onclick: download }, "Download JSON"),
+      h("button", { class: "quiet", type: "button", onclick: verify, title: "Re-run the saved request and compare every number" }, "Verify by re-running"),
+      status));
+}
