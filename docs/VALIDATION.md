@@ -32,6 +32,10 @@ The same suite also passes locally against Qwen2.5-0.5B-Instruct fp16 (qwen2 arc
 copy made in-test. On those two the block-size test skips itself (their head sizes are
 multiples of 32), which is the correct outcome.
 
+When a graph does not name a hooked tensor, the run drops that view with a warning instead of
+failing: `analysis::tests` checks this with a made-up tensor name on the fixture, whose graph
+names every real one.
+
 The KL code is separately unit-tested (`src/stats.rs`) against a textbook softmax
 implementation (agreement within 1e-12 absolute + 1e-9 relative over 5,000-token
 vocabularies), an analytic two-token case, logit-shift invariance, and exact zero on
