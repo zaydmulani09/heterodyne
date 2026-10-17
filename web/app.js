@@ -125,3 +125,27 @@ const SAMPLE_TEXT = "Question: A bakery sells muffins for 3 dollars each and coo
 function saveForm() {
   try { localStorage.setItem("hd-form", JSON.stringify(readForm())); } catch {}
 }
+function restoreForm() {
+  let f;
+  try { f = JSON.parse(localStorage.getItem("hd-form") || "null"); } catch {}
+  $("#text").value = SAMPLE_TEXT;
+  if (f) fillForm(f.request);
+}
+// Put a request's settings into the setup rail (so an opened experiment can be re-run as is).
+function fillForm(r) {
+  for (const p of ["a", "b"]) {
+    const arm = r[p];
+    // Shared files carry bare file names; map them onto a model this server can see.
+    const local = (m) => (S.state && !/[\\/]/.test(m) ? S.state.models.find((x) => x.name === m)?.path : null) ?? m;
+    $(`#${p}-model`).value = p === "b" && arm.model === r.a.model ? "" : local(arm.model);
+    $(`#${p}-ctk`).value = arm.cache_k; $(`#${p}-ctv`).value = arm.cache_v; $(`#${p}-fa`).value = arm.flash_attn;
+    $(`#${p}-ub`).value = arm.ubatch; $(`#${p}-threads`).value = arm.threads;
+  }
+  setKind(r.input.kind);
+  $("#text").value = r.input.text ?? r.input.prompt ?? SAMPLE_TEXT;
+  if (r.input.kind === "generate") { $("#chat").checked = r.input.chat; $("#max-new").value = r.input.max_new; }
+  $("#chunk").value = r.chunk_tokens; $("#max-chunks").value = r.max_chunks;
+  $("#floor").checked = r.floor; $("#layers").checked = r.layers; $("#repair").checked = r.repair;
+  $("#stride").value = r.repair_stride; $("#attribution").checked = r.attribution;
+  $("#skip").value = r.skip_first ?? 0;
+}
