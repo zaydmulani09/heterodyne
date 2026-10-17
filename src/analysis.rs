@@ -653,3 +653,13 @@ pub fn run(req: &Request, models: &mut Models, cancel: &AtomicBool, progress: &d
         warnings,
     })
 }
+
+fn argmax(r: &[f32]) -> usize {
+    let mut b = 0;
+    for (i, &x) in r.iter().enumerate() {
+        if x > r[b] {
+            b = i;
+        }
+    }
+    b
+}
