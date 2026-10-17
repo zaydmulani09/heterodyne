@@ -256,3 +256,11 @@ cargo build --release
 Requires Rust, CMake and a C++17 compiler (Windows: MSVC toolchain and the Visual Studio
 Build Tools). The first build compiles llama.cpp. `HETERODYNE_PORTABLE=1` builds for
 x86-64-v3 instead of the build machine. See [CONTRIBUTING.md](CONTRIBUTING.md) for tests.
+
+## Privacy and security
+
+The server binds to 127.0.0.1 only, checks the Host header, requires a per-process random
+token on every API call and refuses to be framed, so other websites cannot drive it. It is
+meant for single-user machines: anyone who can log in to yours can read the token from the
+page. Model paths are opened only if the file starts with the GGUF magic. Nothing is sent
+anywhere; there is no telemetry.
