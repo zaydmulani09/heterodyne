@@ -175,3 +175,20 @@ function renderHistory() {
       x.title || `${x.a} vs ${x.b}`,
       h("span", { class: "meta" }, `${new Date(x.created_unix * 1000).toLocaleString()}, mean KL ${fmtKL(x.mean_kl)}, flips ${pct(x.flip_rate)}`)))));
 }
+
+async function openSaved(file) {
+  try { showExperiment(await api(`/api/experiment?file=${encodeURIComponent(file)}`), file); }
+  catch (e) { renderError(e.message); }
+}
+
+// ---------- running ----------
+async function startRun(ev) {
+  ev.preventDefault();
+  if (S.busy) return;
+  const body = readForm();
+  if (!body.request.a.model) { renderError("Choose a model file for arm A."); return; }
+  if (body.request.input.kind === "text" && !body.request.input.text.trim()) { renderError("Paste some text for both arms to read."); return; }
+  saveForm();
+  try { const { job } = await api("/api/run", body); poll(job); }
+  catch (e) { renderError(e.message); }
+}
