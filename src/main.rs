@@ -228,3 +228,68 @@ fn real_main() -> Result<(), String> {
         }
     }
 }
+
+fn print_summary(e: &bundle::Experiment) {
+    let r = &e.results;
+    let s = &r.summary;
+    println!("A  {}  [{}]", e.provenance.a.desc, settings(&e.request.a));
+    println!("B  {}  [{}]", e.provenance.b.desc, settings(&e.request.b));
+    let ci = s.mean_kl_ci95.map(|c| format!(" (95% t-interval over {} chunks: {:.5}–{:.5})", s.n_chunks, c[0], c[1])).unwrap_or_default();
+    println!(
+        "scored positions {}  in {} chunk(s), first {} tokens of each chunk not counted",
+        s.n_positions,
+        r.chunks.len(),
+        e.request.skip_first
+    );
+    println!("mean KL(A‖B) {:.6}{ci}   median {:.2e}   p99 {:.4}   max {:.4}", s.mean_kl, s.median_kl, s.p99_kl, s.max_kl);
+    println!("top-1 flips {} ({:.2}%)   near-tie {}   confident {}", s.flips, 100.0 * s.flip_rate, s.flips_near_tie, s.flips_confident);
+    if let (Some(a), Some(b)) = (s.ppl_a, s.ppl_b) {
+        println!("perplexity A {a:.3}   B {b:.3}");
+    }
+    if let Some(f) = &r.floor {
+        let splits: Vec<String> = r.chunks.iter().filter_map(|c| c.floor_ubatch).map(|u| u.to_string()).collect();
+        println!(
+            "numerical floor (A re-run with ubatch {}): mean KL {:.2e}, flips {} ({:.2}%)",
+            splits.join("/"),
+            f.mean_kl,
+            f.flips,
+            100.0 * f.flip_rate
+        );
+    }
+    if let Some([a, b]) = r.flash_attn_used {
+        println!("flash attention as run: A {}, B {}", if a { "on" } else { "off" }, if b { "on" } else { "off" });
+    }
+    if let Some(g) = &r.generation {
+        match g.fork {
+            Some(i) => println!(
+                "greedy fork at generated token {i}   reproduced by batched scoring: {}{}",
+                match g.fork_reproduced {
+                    Some(true) => "yes",
+                    Some(false) => "no",
+                    None => "n/a",
+                },
+                g.fork_gap_a.map(|d| format!("   (A: log p(own) - log p(B's) = {d:.3} nats)")).unwrap_or_default()
+            ),
+            None => println!("greedy generations identical ({} tokens)", g.a.len()),
+        }
+    }
+    if let (Some(ls), Some(d), Some(n)) = (&r.repair_layers, &r.repair_denoise_mean, &r.repair_noise_mean) {
+        println!("transplant  layer  KL(A‖B+A's residual)  KL(A‖A+B's residual)");
+        for ((l, d), n) in ls.iter().zip(d).zip(n) {
+            println!("            {l:>5}  {d:>20.6}  {n:>20.6}");
+        }
+    }
+    if let Some(at) = &r.attribution {
+        println!("attribution over {:?}", at.factors);
+        for c in &at.cells {
+            let name = if c.switched.is_empty() { "(A)".to_string() } else { c.switched.join(" + ") };
+            match &c.error {
+                Some(e) => println!("  {name:<40} rejected: {e}"),
+                None => println!("  {name:<40} mean KL {:.6}  flips {:.2}%", c.mean_kl, 100.0 * c.flip_rate),
+            }
+        }
+    }
+    for w in &r.warnings {
+        println!("warning: {w}");
+    }
+}
