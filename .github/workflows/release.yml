@@ -1,0 +1,58 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: create the release once, before the builds upload to it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --notes "Portable CPU builds (x86-64-v3 on Linux and Windows, arm64 on macOS). Checksums in SHA256SUMS-*.txt."
+
+  build:
+    needs: create
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            asset: heterodyne-linux-x86_64.tar.gz
+          - os: windows-latest
+            asset: heterodyne-windows-x86_64.zip
+          - os: macos-latest
+            asset: heterodyne-macos-arm64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build (portable CPU flags)
+        env:
+          HETERODYNE_PORTABLE: "1"
+        run: cargo build --release
+      - name: package
+        shell: bash
+        run: |
+          mkdir dist
+          cp README.md LICENSE dist/
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/release/heterodyne.exe dist/
+            (cd dist && 7z a ../${{ matrix.asset }} .)
+          else
+            cp target/release/heterodyne dist/
+            tar -czf ${{ matrix.asset }} -C dist .
+          fi
+          if command -v sha256sum >/dev/null; then sha256sum ${{ matrix.asset }}; else shasum -a 256 ${{ matrix.asset }}; fi > SHA256SUMS-${{ matrix.asset }}.txt
+      - name: upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" ${{ matrix.asset }} SHA256SUMS-${{ matrix.asset }}.txt --clobber
