@@ -165,3 +165,13 @@ async function loadState() {
   $("#workspace").textContent = `Stored in ${st.workspace}`;
   renderHistory();
 }
+
+function renderHistory() {
+  const items = S.state.experiments;
+  const ul = $("#history");
+  if (!items.length) { ul.replaceChildren(h("li", { class: "hint" }, "Nothing saved yet. Run a comparison, then save it here.")); return; }
+  ul.replaceChildren(...items.map((x) => h("li", {},
+    h("button", { type: "button", "aria-current": S.file === x.file ? "true" : null, onclick: () => openSaved(x.file) },
+      x.title || `${x.a} vs ${x.b}`,
+      h("span", { class: "meta" }, `${new Date(x.created_unix * 1000).toLocaleString()}, mean KL ${fmtKL(x.mean_kl)}, flips ${pct(x.flip_rate)}`)))));
+}
