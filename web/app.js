@@ -115,3 +115,13 @@ function readForm() {
     notes: { title: $("#title").value.trim(), hypothesis: $("#hypothesis").value.trim(), interpretation: "" },
   };
 }
+function setKind(kind) {
+  $(`input[name="kind"][value="${kind}"]`).checked = true;
+  $("#gen-opts").hidden = kind !== "generate";
+  $("#text-label").textContent = kind === "text" ? "Text both arms will read" : "Prompt both arms will answer";
+}
+const SAMPLE_TEXT = "Question: A bakery sells muffins for 3 dollars each and cookies for 2 dollars each. On Monday it sold 17 muffins and 23 cookies. How much money did the bakery make?\nAnswer: The muffins brought in 17 * 3 = 51 dollars. The cookies brought in 23 * 2 = 46 dollars. In total, the bakery made 51 + 46 = 97 dollars.\n\nThe capital of Australia is Canberra, not Sydney, although many people assume otherwise.";
+
+function saveForm() {
+  try { localStorage.setItem("hd-form", JSON.stringify(readForm())); } catch {}
+}
