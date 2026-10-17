@@ -33,3 +33,66 @@ impl Arm {
 fn d_auto() -> String {
     "auto".into()
 }
+fn d_f16() -> String {
+    "f16".into()
+}
+fn t() -> bool {
+    true
+}
+
+impl Arm {
+    pub fn cfg(&self) -> Result<Cfg, String> {
+        let fa = match self.flash_attn.as_str() {
+            "auto" => -1,
+            "off" => 0,
+            "on" => 1,
+            o => return Err(format!("flash_attn must be auto|on|off, got '{o}'")),
+        };
+        let kt = |n: &str| cache_type(n).ok_or_else(|| format!("unknown cache type '{n}'"));
+        if !(1..=256).contains(&self.threads) {
+            return Err(format!("threads must be 1 to 256, got {}", self.threads));
+        }
+        if !(0..=16384).contains(&self.ubatch) {
+            return Err(format!("ubatch must be 0 to 16384, got {}", self.ubatch));
+        }
+        Ok(Cfg { n_threads: self.threads, n_ubatch: self.ubatch, flash_attn: fa, type_k: kt(&self.cache_k)?, type_v: kt(&self.cache_v)? })
+    }
+
+    /// Settings in which `other` differs from `self`, by name.
+    fn differences(&self, other: &Arm) -> Vec<&'static str> {
+        let mut d = vec![];
+        if self.model != other.model {
+            d.push("model")
+        }
+        if self.ubatch != other.ubatch {
+            d.push("ubatch")
+        }
+        if self.flash_attn != other.flash_attn {
+            d.push("flash_attn")
+        }
+        if self.cache_k != other.cache_k {
+            d.push("cache_k")
+        }
+        if self.cache_v != other.cache_v {
+            d.push("cache_v")
+        }
+        if self.threads != other.threads {
+            d.push("threads")
+        }
+        d
+    }
+
+    fn with(&self, other: &Arm, factor: &str) -> Arm {
+        let mut a = self.clone();
+        match factor {
+            "model" => a.model = other.model.clone(),
+            "ubatch" => a.ubatch = other.ubatch,
+            "flash_attn" => a.flash_attn = other.flash_attn.clone(),
+            "cache_k" => a.cache_k = other.cache_k.clone(),
+            "cache_v" => a.cache_v = other.cache_v.clone(),
+            "threads" => a.threads = other.threads,
+            _ => unreachable!(),
+        }
+        a
+    }
+}
