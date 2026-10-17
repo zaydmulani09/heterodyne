@@ -300,3 +300,20 @@ fn state_json(st: &State) -> Value {
         "job": st.last_job,
     })
 }
+
+fn new_job(st: &mut State, kind: &str) -> Result<(u64, Arc<AtomicBool>), Resp> {
+    let mut jobs = lock(&st.jobs);
+    if jobs.values().any(|j| j.status == "running") {
+        return Err(err(409, "another job is running; one at a time keeps CPU timings and memory sane"));
+    }
+    jobs.retain(|_, j| j.status == "running"); // keep memory bounded: only the newest finished job is polled
+    let id = st.next_job;
+    st.next_job += 1;
+    st.last_job = Some(id);
+    let cancel = Arc::new(AtomicBool::new(false));
+    jobs.insert(
+        id,
+        Job { status: "running".into(), kind: kind.into(), stage: "starting".into(), cancel: cancel.clone(), ..Default::default() },
+    );
+    Ok((id, cancel))
+}
