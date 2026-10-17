@@ -222,12 +222,13 @@ are missing and why. Please file an architecture report when you try one.
 
 CPU only. Peak memory is both models (mmapped) plus about `4 × tokens × vocab × 4` bytes of
 logits (≈ 300 MB for a 128-token chunk of a 151k vocabulary) and, with layer views,
-`2 × layers × tokens × width × 4` bytes of residual captures (30 MB here; about 1.3 GB per
+`2 × layers × tokens × width × 4` bytes of residual captures, twice that with the
+attention/MLP split (30 MB here; about 1.3 GB per
 chunk for an 80-layer, 8192-wide model). heterodyne refuses runs that would need more than
 about 12 GB. Time is dominated by forward passes:
 
 - a plain comparison: 2 passes per chunk, +1 for the floor;
-- transplants: +2 passes per transplanted layer per chunk;
+- transplants: +2 passes per transplanted layer per chunk, +2 more with the attention/MLP split;
 - attribution: +2^k − 2 passes per chunk for k differing settings.
 
 The BF16 vs Q4_K_M experiment with transplants at all 28 layers (12 chunks, 708 passes) took
