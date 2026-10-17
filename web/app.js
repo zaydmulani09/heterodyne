@@ -317,3 +317,16 @@ function panel(title, explain, ...body) {
 function legendKL() {
   return h("div", { class: "legend" }, h("span", { class: "key" }, "KL", h("span", { class: "ramp", style: `background:${rampCss()}` }), "10⁻⁵ to 10 nats"));
 }
+function legendErr(es) {
+  const range = es.hi === es.lo ? "all zero" : `${sup(es.lo)} to ${sup(es.hi)} (fitted to this chunk)`;
+  return h("div", { class: "legend" }, h("span", { class: "key" }, "relative difference", h("span", { class: "ramp", style: `background:${rampCss()}` }), range));
+}
+
+const M = { l: 46, r: 10, t: 14, b: 22 }; // shared plot margins so all position axes line up
+
+// Width of the left results column, so SVG and canvas plots draw at 1:1 scale.
+function plotWidth() {
+  const cs = getComputedStyle(main);
+  const inner = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  return Math.max(300, (innerWidth > 1100 ? inner - 320 - 24 : inner) - 2);
+}
