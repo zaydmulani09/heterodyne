@@ -321,3 +321,11 @@ pub fn quantize(input: &Path, output: &Path, ftype: i32, nthread: i32) -> Result
         rc => Err(format!("llama_model_quantize failed ({rc})")),
     }
 }
+
+/// KV-cache element types that llama.cpp accepts for `type_k` / `type_v`.
+pub const CACHE_TYPES: &[(&str, i32)] =
+    &[("f32", 0), ("f16", 1), ("bf16", 30), ("q8_0", 8), ("q5_1", 7), ("q5_0", 6), ("q4_1", 3), ("q4_0", 2), ("iq4_nl", 20)];
+
+pub fn cache_type(name: &str) -> Option<i32> {
+    CACHE_TYPES.iter().find(|(n, _)| *n == name).map(|&(_, v)| v)
+}
