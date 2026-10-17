@@ -309,3 +309,17 @@ fn piece(m: &Model, t: i32) -> String {
             .collect(),
     }
 }
+
+/// Token chunks for scoring: [special prefix] + body slice, at most `chunk` tokens each.
+/// Also returns how many body tokens did not fit in `max_chunks`.
+fn chunks_for(m: &Model, text: &str, chunk: usize, max_chunks: usize) -> Result<(Vec<Vec<i32>>, usize), String> {
+    let prefix = m.tokenize("", true)?;
+    let body = m.tokenize(text, false)?;
+    let step = chunk.saturating_sub(prefix.len()).max(1);
+    let out: Vec<Vec<i32>> =
+        body.chunks(step).map(|c| prefix.iter().chain(c).copied().collect::<Vec<_>>()).filter(|c| c.len() >= 2).take(max_chunks).collect();
+    if out.is_empty() {
+        return Err("input is too short: need at least 2 tokens".into());
+    }
+    Ok((out, body.len().saturating_sub(step * max_chunks)))
+}
