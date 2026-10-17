@@ -63,6 +63,10 @@ enum Cmd {
         repair: bool,
         #[arg(long, default_value_t = 1)]
         repair_stride: usize,
+        /// Also transplant between each layer's attention and MLP blocks, splitting every layer's
+        /// share into the two (2 more passes per layer; implies --repair, needs stride 1).
+        #[arg(long)]
+        components: bool,
         /// Run every combination of the settings that differ between arms.
         #[arg(long)]
         attribution: bool,
@@ -171,6 +175,7 @@ fn real_main() -> Result<(), String> {
             max_chunks,
             repair,
             repair_stride,
+            components,
             attribution,
             no_floor,
             no_layers,
@@ -204,9 +209,9 @@ fn real_main() -> Result<(), String> {
                 chunk_tokens: chunk,
                 max_chunks,
                 layers: !no_layers,
-                repair,
+                repair: repair || components,
                 repair_stride,
-                components: false,
+                components,
                 attribution,
                 floor: !no_floor,
                 top_k,
