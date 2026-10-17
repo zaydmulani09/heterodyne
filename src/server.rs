@@ -30,3 +30,15 @@ struct Job {
     error: Option<String>,
     cancel: Arc<AtomicBool>,
 }
+
+struct State {
+    token: String,
+    origin_hosts: Vec<String>,
+    model_dirs: Vec<PathBuf>,
+    workspace: PathBuf,
+    models: Arc<Mutex<Models>>,
+    jobs: Arc<Mutex<HashMap<u64, Job>>>,
+    next_job: u64,
+    /// The most recent job, so a reloaded page can reattach to it.
+    last_job: Option<u64>,
+}
