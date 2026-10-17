@@ -275,4 +275,35 @@ int32_t hd_eval(void * mv, const hd_cfg * cfg, const int32_t * toks, int32_t n, 
     return ret;
 }
 
+// Greedy (argmax) incremental generation, like a chat client at temperature 0.
+// Writes up to n_gen tokens to out; stops after an end-of-generation token.
+int32_t hd_generate(void * mv, const hd_cfg * cfg, const int32_t * prompt, int32_t n_prompt, int32_t n_gen,
+                    int32_t * out, char * err, int32_t errlen) {
+    auto * m = (llama_model *) mv;
+    const int32_t nv = llama_vocab_n_tokens(llama_model_get_vocab(m));
+    llama_context * ctx = make_ctx(m, n_prompt + n_gen, cfg, nullptr, nullptr);
+    if (!ctx) { set_err(err, errlen, "failed to create context (check KV type / flash-attn combination)"); return -1; }
+    llama_batch b = llama_batch_init(std::max(n_prompt, 1), 0, 1);
+    for (int32_t i = 0; i < n_prompt; i++) {
+        b.token[i] = prompt[i]; b.pos[i] = i; b.n_seq_id[i] = 1; b.seq_id[i][0] = 0; b.logits[i] = i == n_prompt - 1;
+    }
+    b.n_tokens = n_prompt;
+    int32_t produced = 0;
+    if (llama_decode(ctx, b) != 0) { set_err(err, errlen, "llama_decode failed on prompt"); produced = -1; }
+    while (produced >= 0 && produced < n_gen) {
+        const float * lg = llama_get_logits_ith(ctx, -1);
+        if (any_non_finite(lg, nv)) { set_err(err, errlen, "non-finite logits while generating"); produced = -1; break; }
+        int32_t best = 0;
+        for (int32_t v = 1; v < nv; v++) if (lg[v] > lg[best]) best = v;
+        out[produced++] = best;
+        if (llama_vocab_is_eog(llama_model_get_vocab(m), best) || produced == n_gen) break;
+        b.n_tokens = 1;
+        b.token[0] = best; b.pos[0] = n_prompt + produced - 1; b.n_seq_id[0] = 1; b.seq_id[0][0] = 0; b.logits[0] = 1;
+        if (llama_decode(ctx, b) != 0) { set_err(err, errlen, "llama_decode failed while generating"); produced = -1; }
+    }
+    llama_batch_free(b);
+    llama_free(ctx);
+    return produced;
+}
+
 }  // extern "C"
