@@ -119,3 +119,112 @@ fn progress(p: Progress) {
     eprint!("\r[{:>3}/{:<3}] {:<24}", p.done, p.total, p.stage);
     let _ = std::io::stderr().flush();
 }
+
+fn main() {
+    if let Err(e) = real_main() {
+        eprintln!("\nerror: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn real_main() -> Result<(), String> {
+    match Cli::parse().cmd {
+        Cmd::Serve { port, models, workspace, no_open } => server::serve(server::Options {
+            port,
+            model_dirs: if models.is_empty() { vec![std::env::current_dir().map_err(|e| e.to_string())?] } else { models },
+            workspace: workspace.unwrap_or_else(|| home().join(".heterodyne").join("experiments")),
+            open: !no_open,
+        }),
+        Cmd::Info { model } => {
+            let m = ffi::Model::load(&model)?;
+            let i = &m.info;
+            println!(
+                "{}\n  layers {}  width {}  vocab {}  params {}  ctx_train {}",
+                i.desc, i.n_layer, i.n_embd, i.n_vocab, i.n_params, i.n_ctx_train
+            );
+            println!("  sha256 {}", bundle::file_sha256(&model)?);
+            println!("  system {}", ffi::system_info());
+            Ok(())
+        }
+        Cmd::Verify { file, search } => {
+            let e = bundle::load(&file)?;
+            let r = bundle::verify(&e, &search, &mut Models::default(), &progress)?;
+            eprintln!();
+            println!("{}", serde_json::to_string_pretty(&r).unwrap());
+            if r.outcome == "exact" && r.integrity_ok {
+                Ok(())
+            } else {
+                Err(format!("verification outcome: {}", r.outcome))
+            }
+        }
+        Cmd::Diff {
+            a,
+            b,
+            a_set,
+            b_set,
+            text_file,
+            text,
+            prompt,
+            raw,
+            max_new,
+            chunk,
+            max_chunks,
+            repair,
+            repair_stride,
+            attribution,
+            no_floor,
+            no_layers,
+            top_k,
+            skip_first,
+            title,
+            hypothesis,
+            out,
+        } => {
+            let base = Arm {
+                model: a.clone(),
+                threads: Arm::default_threads(),
+                ubatch: 0,
+                flash_attn: "auto".into(),
+                cache_k: "f16".into(),
+                cache_v: "f16".into(),
+            };
+            let arm_a = parse_set(&base, &a_set)?;
+            let mut arm_b = parse_set(&arm_a, &b_set)?;
+            arm_b.model = b.unwrap_or(a);
+            let input = match (text_file, text, prompt) {
+                (Some(f), _, _) => Input::Text { text: std::fs::read_to_string(&f).map_err(|e| format!("{}: {e}", f.display()))? },
+                (_, Some(t), _) => Input::Text { text: t },
+                (_, _, Some(p)) => Input::Generate { prompt: p, chat: !raw, max_new },
+                _ => return Err("give --text-file, --text or --prompt".into()),
+            };
+            let req = Request {
+                a: arm_a,
+                b: arm_b,
+                input,
+                chunk_tokens: chunk,
+                max_chunks,
+                layers: !no_layers,
+                repair,
+                repair_stride,
+                attribution,
+                floor: !no_floor,
+                top_k,
+                skip_first,
+            };
+            let e = bundle::record(
+                req,
+                Notes { title, hypothesis, interpretation: String::new() },
+                &mut Models::default(),
+                &AtomicBool::new(false),
+                &progress,
+            )?;
+            eprintln!();
+            print_summary(&e);
+            if let Some(p) = out {
+                std::fs::write(&p, serde_json::to_string(&e).unwrap()).map_err(|e| format!("{}: {e}", p.display()))?;
+                println!("wrote {}", p.display());
+            }
+            Ok(())
+        }
+    }
+}
