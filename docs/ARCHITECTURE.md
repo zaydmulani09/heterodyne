@@ -59,6 +59,8 @@ shift a struct field under the FFI.
 | layer map | ‖h_B − h_A‖ / ‖h_A‖ of `l_out-l` per position | `stats::rel_err_rows` |
 | denoise transplant | KL(A ‖ B with A's `l_out-l` written in), every position | `analysis::run` |
 | noise transplant | KL(A ‖ A with B's `l_out-l` written in), every position | `analysis::run` |
+| post-attention transplants | the same two, written into `ffn_inp-l` instead (every layer, with `components`) | `analysis::run` |
+| attention / MLP share | per layer, the step in denoise KL as the transplant point moves from the layer's input to `ffn_inp-l` (attention), then to `l_out-l` (MLP); the input of layer l is `l_out-(l−1)`, and for layer 0 the untouched run. Reverse direction likewise, from 0 | derived from stored KLs: `web/app.js::blockSteps`, `main.rs::print_summary` |
 | attribution | every subset of differing settings switched from A's to B's value; flash attention counts only if it changes what actually runs; combinations llama.cpp rejects are recorded, not fatal | `analysis::run` |
 | CI | 95% t-interval for the position-weighted mean with a cluster-robust standard error over chunks (positions within a chunk are correlated), k−1 degrees of freedom | `stats::cluster_t_ci` |
 
