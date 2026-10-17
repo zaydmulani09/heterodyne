@@ -1,0 +1,87 @@
+The lighthouse keeper climbed the spiral stairs every evening at dusk. There were one hundred and twelve steps, and he had counted them so many times that the number no longer meant anything to him. At the top, he trimmed the wick, polished the great lens, and watched the first ships of the night appear on the horizon. Some nights the fog came in so thick that the beam seemed to stop a few meters from the glass, as if the light itself had grown tired.
+
+Question: A bakery sells muffins for 3 dollars each and cookies for 2 dollars each. On Monday it sold 17 muffins and 23 cookies. How much money did the bakery make on Monday?
+Answer: The muffins brought in 17 * 3 = 51 dollars. The cookies brought in 23 * 2 = 46 dollars. In total, the bakery made 51 + 46 = 97 dollars.
+
+Question: A train leaves at 14:35 and the trip takes 2 hours and 50 minutes. When does it arrive?
+Answer: 14:35 plus 2 hours is 16:35. Adding 50 more minutes gives 17:25. The train arrives at 17:25.
+
+def fibonacci(n):
+    """Return the n-th Fibonacci number."""
+    if n < 2:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+def is_prime(n):
+    if n < 2:
+        return False
+    for d in range(2, int(n ** 0.5) + 1):
+        if n % d == 0:
+            return False
+    return True
+
+print([x for x in range(30) if is_prime(x)])
+
+The capital of Australia is Canberra, not Sydney, although many people assume otherwise. Canberra was chosen as a compromise between Sydney and Melbourne, the two largest cities, and construction of the planned capital began in 1913. The chemical symbol for gold is Au, from the Latin word aurum. Water boils at 100 degrees Celsius at sea level, but at lower temperatures on high mountains because the air pressure is lower.
+
+In a database, an index is a data structure that makes lookups faster at the cost of extra storage and slower writes. A B-tree keeps keys sorted and balanced so that a search, an insertion, or a deletion touches only a logarithmic number of pages. A hash index answers equality queries quickly but cannot help with range queries such as finding every order placed between two dates.
+
+She opened the letter slowly. It had been written in a careful, slanted hand, and it smelled faintly of cedar. "Dear Margaret," it began, "by the time you read this I will have left the city." She read the first line three times before she understood it, then sat down on the edge of the bed and read the rest without stopping.
+
+To make bread, mix five hundred grams of flour with ten grams of salt, seven grams of dried yeast, and about three hundred and fifty milliliters of warm water. Knead the dough for ten minutes until it is smooth and elastic, then let it rise in a covered bowl for an hour, or until it has doubled in size. Shape it into a loaf, let it rise again, and bake it at two hundred and twenty degrees for thirty minutes.
+
+SELECT customer_id, COUNT(*) AS orders, SUM(total) AS revenue
+FROM orders
+WHERE created_at >= '2024-01-01'
+GROUP BY customer_id
+HAVING COUNT(*) > 5
+ORDER BY revenue DESC
+LIMIT 10;
+
+The theory of evolution by natural selection explains how populations change over generations. Individuals with traits that improve survival and reproduction tend to leave more offspring, so those traits become more common. Over very long periods, these small changes can accumulate into new species. The theory does not say that evolution has a goal; it describes a process that responds to whatever conditions a population happens to face.
+
+Question: A water tank holds 1200 liters. A pipe fills it at 40 liters per minute while a leak drains 15 liters per minute. Starting empty, how long until it is full?
+Answer: The tank gains 40 - 15 = 25 liters each minute. 1200 / 25 = 48. It is full after 48 minutes.
+
+Question: Mia read 18 pages on Monday, twice as many on Tuesday, and 7 fewer than Tuesday on Wednesday. How many pages did she read in total?
+Answer: Tuesday was 2 * 18 = 36 pages. Wednesday was 36 - 7 = 29 pages. In total she read 18 + 36 + 29 = 83 pages.
+
+{
+  "id": 4127,
+  "name": "Ada Lovelace",
+  "born": 1815,
+  "languages": ["English", "French"],
+  "notes": null,
+  "active": false
+}
+
+#!/usr/bin/env bash
+set -euo pipefail
+for f in logs/*.txt; do
+  lines=$(wc -l < "$f")
+  echo "$f has $lines lines"
+done
+
+Photosynthesis is the process by which plants, algae and some bacteria turn light into chemical energy. In the chloroplasts, light splits water molecules, releasing oxygen, while the energy captured is used to turn carbon dioxide into sugars. Most of the oxygen in the atmosphere has been produced this way over billions of years.
+
+"Are you coming to the station?" asked Tom.
+"Only if the rain stops," said his sister, pulling her coat closer. "Last time we waited an hour and the train never came."
+"It will come today," Tom said, though he did not sound sure.
+
+The Pacific is the largest and deepest of the world's oceans. It covers about a third of the planet's surface, more than all the land put together. Its deepest known point, the Challenger Deep in the Mariana Trench, lies nearly eleven kilometers below the surface.
+
+class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if not self.items:
+            raise IndexError("pop from empty stack")
+        return self.items.pop()
+
+When interest compounds annually at 5 percent, an investment of 1000 dollars grows to 1000 * 1.05 = 1050 dollars after one year and to 1050 * 1.05 = 1102.50 dollars after two. The growth accelerates because each year's interest also earns interest in the years that follow.
+
+The old library closed at six, but the caretaker let the students stay until the last bus. They sat at the long oak tables under green lamps, turning pages quietly, while outside the snow covered the bicycles and the empty square.
