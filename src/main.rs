@@ -110,3 +110,12 @@ fn parse_set(base: &Arm, spec: &str) -> Result<Arm, String> {
     a.cfg()?;
     Ok(a)
 }
+
+fn home() -> PathBuf {
+    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_else(|| ".".into())
+}
+
+fn progress(p: Progress) {
+    eprint!("\r[{:>3}/{:<3}] {:<24}", p.done, p.total, p.stage);
+    let _ = std::io::stderr().flush();
+}
