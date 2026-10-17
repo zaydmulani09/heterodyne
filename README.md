@@ -181,3 +181,35 @@ uses an odd split and records it.
 
 Each experiment file stores your hypothesis and interpretation next to the measurements,
 outside the integrity checksum: interpretation is not evidence.
+
+## What is implemented
+
+| feature | status |
+|---|---|
+| two arms = GGUF + KV types + flash-attn + ubatch + threads | implemented, tested |
+| teacher-forced exact KL, flips, gaps, top-k, perplexity per arm | implemented, tested |
+| chunked text, leading tokens shown but not counted, cluster t-interval | implemented, tested |
+| numerical floor (odd ubatch re-split, recorded per chunk) | implemented, tested |
+| residual-stream divergence map (`l_out` per layer) | implemented, tested |
+| transplants in both directions, every n-th layer | implemented, tested |
+| factorial attribution over up to 5 differing settings, rejected combinations recorded | implemented, tested on the fixture; exercised on Qwen3-0.6B |
+| flash attention attributed by what actually ran | implemented, tested |
+| greedy generation fork + teacher-forced re-check of the fork | implemented; exercised on Qwen3-0.6B |
+| experiment files with sha256 provenance, integrity checksum, exact replay | implemented, tested |
+| local web UI with auto-save and reattach after reload | implemented; tested by hand in Chromium-based browsers at desktop and phone widths, light and dark |
+| GPU backends | not built; not validated |
+| component-level transplants (attention vs MLP output) | planned |
+| build-to-build comparison (two llama.cpp versions) | planned |
+
+### Tested models
+
+| architecture | model | result |
+|---|---|---|
+| llama | stories260K (ggml-org/models) | engine test suite; CI on Linux, Windows, macOS |
+| qwen2 | Qwen2.5-0.5B-Instruct fp16 (Qwen/Qwen2.5-0.5B-Instruct-GGUF) | engine test suite, local |
+| qwen3 | Qwen3-0.6B BF16 (ggml-org) + unsloth Q8_0, UD-Q4_K_XL, Q4_K_M, Q3_K_M, Q2_K | engine test suite, local; experiments in `examples/` |
+
+Other architectures should work when their graph names each layer's residual output
+`l_out-<n>` (most decoder-only models in llama.cpp do). When it doesn't, heterodyne still
+compares outputs and says why the layer views are missing. Please file an architecture
+report when you try one.
