@@ -41,5 +41,5 @@ jobs:
         run: |
           cargo run --release -q -- diff --a tests/fixtures/stories260K.gguf --b-set ctk=bf16 \
             --text "Once upon a time there was a little dog who liked to run in the park." \
-            --repair -o smoke.json
+            --components -o smoke.json
           cargo run --release -q -- verify smoke.json
