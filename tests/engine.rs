@@ -243,3 +243,16 @@ fn experiment_roundtrips_and_verifies_exactly() {
     moved.provenance.b.sha256 = "0".repeat(64);
     assert_ne!(bundle::integrity(&moved.request, &moved.provenance, &moved.results), moved.integrity);
 }
+
+#[test]
+fn incompatible_cache_type_is_an_error_not_an_abort() {
+    // The fixture's head size (8) is not a multiple of q8_0's 32-element block; ggml would assert.
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    if m.info.head_k % 32 == 0 {
+        eprintln!("skipping: head size {} is block-compatible", m.info.head_k);
+        return;
+    }
+    let e = m.eval(&Cfg { type_k: 8, ..cfg() }, &toks(&m), &mut []).unwrap_err();
+    assert!(e.contains("divisible by 32"), "{e}");
+}
