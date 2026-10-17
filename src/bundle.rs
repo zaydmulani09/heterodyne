@@ -198,3 +198,26 @@ pub struct VerifyReport {
     pub max_abs_diff: std::collections::BTreeMap<String, f64>,
     pub notes: Vec<String>,
 }
+
+fn max_diff_rows(a: &Option<Vec<Vec<f32>>>, b: &Option<Vec<Vec<f32>>>) -> Option<f64> {
+    let (a, b) = (a.as_ref()?, b.as_ref()?);
+    Some(a.iter().zip(b).flat_map(|(x, y)| x.iter().zip(y).map(|(p, q)| (*p as f64 - *q as f64).abs())).fold(0.0, f64::max))
+}
+
+/// Locate a model by stored path, else by file name under `search` dirs, checked by sha256.
+fn find_model(id: &ModelId, search: &[PathBuf]) -> Result<String, String> {
+    let mut candidates = vec![PathBuf::from(&id.path)];
+    for d in search {
+        candidates.push(d.join(&id.file_name));
+        // One level deep, like the model list in the UI.
+        for sub in std::fs::read_dir(d).into_iter().flatten().flatten().filter(|e| e.path().is_dir()) {
+            candidates.push(sub.path().join(&id.file_name));
+        }
+    }
+    for c in candidates {
+        if c.is_file() && file_sha256(&c)? == id.sha256 {
+            return Ok(c.to_string_lossy().into_owned());
+        }
+    }
+    Err(format!("no file with sha256 {} found for '{}' (pass --search DIR)", &id.sha256[..12], id.file_name))
+}
