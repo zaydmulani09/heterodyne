@@ -264,3 +264,11 @@ token on every API call and refuses to be framed, so other websites cannot drive
 meant for single-user machines: anyone who can log in to yours can read the token from the
 page. Model paths are opened only if the file starts with the GGUF magic. Nothing is sent
 anywhere; there is no telemetry.
+
+## License
+
+MIT. Bundles llama.cpp (MIT) and the Archivo and Fragment Mono typefaces (SIL OFL 1.1, see
+`web/fonts/`). Model files are not included; their own licenses apply.
+
+Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Validation:
+[docs/VALIDATION.md](docs/VALIDATION.md).
