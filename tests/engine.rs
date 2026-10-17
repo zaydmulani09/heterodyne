@@ -153,3 +153,19 @@ fn identical_arms_diff_to_exactly_zero() {
     assert!(r.layer_err_mean.unwrap().iter().all(|&x| x == 0.0));
     assert!(r.repair_denoise_mean.unwrap().iter().all(|&x| x == 0.0));
 }
+
+#[test]
+fn quantized_variant_diverges_and_transplant_repairs_it() {
+    let Some(p) = fixture() else { return };
+    let (a, b) = (p.to_string_lossy().into_owned(), quantized().to_string_lossy().into_owned());
+    let r = analysis::run(&request(&a, &b), &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap();
+    assert!(r.summary.mean_kl > 0.0, "q8_0 should differ from f32");
+    // Totals count only scored positions: each chunk's first `skip_first` are left out.
+    assert_eq!(r.summary.n_positions, r.chunks.iter().map(|c| c.pos.len() - 4).sum::<usize>());
+    assert!(r.chunks.len() >= 2 && r.summary.mean_kl_ci95.is_some());
+    let den = r.repair_denoise_mean.unwrap();
+    // Writing A's final residual into B leaves only the quantized output head's error.
+    assert!(den[den.len() - 1] < r.summary.mean_kl as f32, "final-layer transplant did not reduce divergence");
+    let noi = r.repair_noise_mean.unwrap();
+    assert!(noi.iter().all(|&x| x >= 0.0));
+}
