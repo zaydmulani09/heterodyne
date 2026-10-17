@@ -142,3 +142,14 @@ fn request(a: &str, b: &str) -> Request {
         skip_first: 4,
     }
 }
+
+#[test]
+fn identical_arms_diff_to_exactly_zero() {
+    let Some(p) = fixture() else { return };
+    let p = p.to_string_lossy().into_owned();
+    let r = analysis::run(&request(&p, &p), &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap();
+    assert_eq!(r.summary.mean_kl, 0.0);
+    assert_eq!(r.summary.flips, 0);
+    assert!(r.layer_err_mean.unwrap().iter().all(|&x| x == 0.0));
+    assert!(r.repair_denoise_mean.unwrap().iter().all(|&x| x == 0.0));
+}
