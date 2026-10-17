@@ -67,3 +67,15 @@ fn observing_does_not_perturb() {
     assert!(plain == hooked, "capturing every l_out changed the logits");
     assert!(caps.iter().all(|c| c.iter().any(|&x| x != 0.0)), "a capture buffer stayed empty");
 }
+
+#[test]
+fn self_patch_is_identity_and_writes_reach_downstream() {
+    let Some(p) = fixture() else { return };
+    let m = Model::load(&p).unwrap();
+    let t = toks(&m);
+    let (base, caps) = capture(&m, &cfg(), &t);
+    let mid = m.info.n_layer / 2;
+    assert!(patch(&m, &cfg(), &t, mid, &caps[mid]) == base, "writing a tensor's own values back changed the logits");
+    let zeros = vec![0f32; caps[mid].len()];
+    assert!(patch(&m, &cfg(), &t, mid, &zeros) != base, "zeroing a residual had no effect: writes are not reaching downstream ops");
+}
