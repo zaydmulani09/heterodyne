@@ -306,4 +306,26 @@ int32_t hd_generate(void * mv, const hd_cfg * cfg, const int32_t * prompt, int32
     return produced;
 }
 
+// Whether the graph llama.cpp builds for these settings uses the fused flash-attention op.
+// "auto" is resolved inside llama.cpp and not exposed, so look at the graph: the callback only
+// answers "no" in the ask phase, which leaves the computation unsplit. 1 yes, 0 no, -1 error.
+int32_t hd_flash_attn_used(void * mv, const hd_cfg * cfg, int32_t tok, char * err, int32_t errlen) {
+    auto * m = (llama_model *) mv;
+    bool used = false;
+    auto cb = [](ggml_tensor * t, bool ask, void * ud) -> bool {
+        if (ask && t->op == GGML_OP_FLASH_ATTN_EXT) *(bool *) ud = true;
+        return false;
+    };
+    llama_context * ctx = make_ctx(m, 2, cfg, cb, &used);
+    if (!ctx) { set_err(err, errlen, "failed to create context (check KV type / flash-attn combination)"); return -1; }
+    llama_batch b = llama_batch_init(1, 0, 1);
+    b.token[0] = tok; b.pos[0] = 0; b.n_seq_id[0] = 1; b.seq_id[0][0] = 0; b.logits[0] = 1;
+    b.n_tokens = 1;
+    const int32_t rc = llama_decode(ctx, b);
+    llama_batch_free(b);
+    llama_free(ctx);
+    if (rc != 0) { set_err(err, errlen, "llama_decode failed while probing flash attention"); return -1; }
+    return used ? 1 : 0;
+}
+
 }  // extern "C"
