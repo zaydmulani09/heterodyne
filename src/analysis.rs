@@ -226,3 +226,14 @@ pub struct Generation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_gap_a: Option<f64>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Cell {
+    /// Factors switched from A's value to B's value.
+    pub switched: Vec<String>,
+    pub mean_kl: f64,
+    pub flip_rate: f64,
+    /// Set when llama.cpp rejects this combination (e.g. a quantized V cache without flash attention).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
