@@ -190,3 +190,22 @@ impl Request {
         }
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Chunk {
+    pub tokens: Vec<i32>,
+    pub pos: Vec<PosStat>,
+    /// KL(A || A') per position, A' = arm A with a different ubatch split.
+    pub floor_kl: Option<Vec<f32>>,
+    /// The ubatch size A' used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor_ubatch: Option<i32>,
+    /// [layer][pos] ||h_B - h_A|| / ||h_A|| of `l_out-<layer>`.
+    pub layer_err: Option<Vec<Vec<f32>>>,
+    /// Layers transplanted (indices into the model's layers).
+    pub repair_layers: Option<Vec<usize>>,
+    /// [i][pos] KL(A || B with A's l_out-<repair_layers[i]> written in).
+    pub repair_denoise: Option<Vec<Vec<f32>>>,
+    /// [i][pos] KL(A || A with B's l_out-<repair_layers[i]> written in).
+    pub repair_noise: Option<Vec<Vec<f32>>>,
+}
