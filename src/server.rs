@@ -259,3 +259,28 @@ fn list_models(dirs: &[PathBuf]) -> Vec<Value> {
     out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     out
 }
+
+fn list_experiments(ws: &Path) -> Vec<Value> {
+    let mut out: Vec<Value> = std::fs::read_dir(ws)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().extension().map_or(false, |x| x == "json"))
+        .filter_map(|e| {
+            let v: Value = serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()?;
+            (v["schema"] == bundle::SCHEMA).then(|| {
+                json!({
+                    "file": e.file_name().to_string_lossy(),
+                    "title": v["notes"]["title"],
+                    "created_unix": v["created_unix"],
+                    "a": v["provenance"]["a"]["file_name"],
+                    "b": v["provenance"]["b"]["file_name"],
+                    "mean_kl": v["results"]["summary"]["mean_kl"],
+                    "flip_rate": v["results"]["summary"]["flip_rate"],
+                })
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| b["created_unix"].as_u64().cmp(&a["created_unix"].as_u64()));
+    out
+}
