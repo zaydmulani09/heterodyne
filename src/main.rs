@@ -120,7 +120,7 @@ fn home() -> PathBuf {
 }
 
 fn progress(p: Progress) {
-    eprint!("\r[{:>3}/{:<3}] {:<24}", p.done, p.total, p.stage);
+    eprint!("\r[{:>3}/{:<3}] {:<30}", p.done, p.total, p.stage);
     let _ = std::io::stderr().flush();
 }
 
