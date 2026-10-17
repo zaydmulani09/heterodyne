@@ -246,3 +246,106 @@ pub fn rel_err_rows(a: &[f32], b: &[f32], w: usize) -> Vec<f32> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rng(seed: u64) -> impl FnMut() -> f32 {
+        let mut s = seed;
+        move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            ((s >> 11) as f64 / (1u64 << 53) as f64 * 20.0 - 10.0) as f32
+        }
+    }
+
+    // Textbook definition with explicit softmax, for cross-checking.
+    fn kl_naive(a: &[f32], b: &[f32]) -> f64 {
+        let sm = |r: &[f32]| {
+            let m = r.iter().cloned().fold(f32::MIN, f32::max) as f64;
+            let e: Vec<f64> = r.iter().map(|&x| (x as f64 - m).exp()).collect();
+            let z: f64 = e.iter().sum();
+            e.into_iter().map(|x| x / z).collect::<Vec<_>>()
+        };
+        let (p, q) = (sm(a), sm(b));
+        p.iter().zip(&q).filter(|(p, _)| **p > 0.0).map(|(p, q)| p * (p / q).ln()).sum()
+    }
+
+    #[test]
+    fn identical_rows_are_exactly_zero() {
+        let mut r = rng(1);
+        let a: Vec<f32> = (0..3 * 1000).map(|_| r()).collect();
+        assert!(kl_rows(&a, &a, 1000).iter().all(|&k| k == 0.0));
+        let c = compare(&a, &a, 1000, &[1, 2], 5);
+        assert!(c.iter().all(|p| p.kl == 0.0 && p.top_a == p.top_b));
+    }
+
+    #[test]
+    fn matches_naive_definition() {
+        let mut r = rng(7);
+        let v = 5000;
+        let a: Vec<f32> = (0..4 * v).map(|_| r()).collect();
+        let b: Vec<f32> = a.iter().map(|&x| x + 0.3 * r() / 10.0).collect();
+        for (i, k) in kl_rows(&a, &b, v).into_iter().enumerate() {
+            let n = kl_naive(&a[i * v..(i + 1) * v], &b[i * v..(i + 1) * v]);
+            assert!((k - n).abs() <= 1e-12 + 1e-9 * n, "row {i}: {k} vs {n}");
+        }
+    }
+
+    #[test]
+    fn analytic_two_token_case() {
+        // p = [1/4, 3/4], q = [1/2, 1/2]
+        let a = [0.0f32, 3f32.ln()];
+        let b = [0.0f32, 0.0];
+        let want = 0.25 * (0.5f64).ln() + 0.75 * (1.5f64).ln();
+        assert!((kl_rows(&a, &b, 2)[0] - want).abs() < 1e-7); // limited by f32 ln(3)
+    }
+
+    #[test]
+    fn invariant_to_logit_shift() {
+        let mut r = rng(3);
+        let a: Vec<f32> = (0..2000).map(|_| r()).collect();
+        let b: Vec<f32> = a.iter().map(|&x| x * 0.9).collect();
+        let b2: Vec<f32> = b.iter().map(|&x| x + 4.0).collect();
+        let (k1, k2) = (kl_rows(&a, &b, 2000)[0], kl_rows(&a, &b2, 2000)[0]);
+        assert!((k1 - k2).abs() < 1e-5 * k1.max(1e-9), "{k1} {k2}");
+    }
+
+    #[test]
+    fn top_and_margin() {
+        let a = [1.0f32, 5.0, 3.0, 5.0 - 0.1];
+        let c = compare(&a, &[0.0, 0.0, 9.0, 0.0], 4, &[2], 3);
+        assert_eq!(c[0].top_a, 1);
+        assert_eq!(c[0].top_b, 2);
+        assert!((c[0].margin_a - 0.1).abs() < 1e-6);
+        assert_eq!(c[0].topk_a.iter().map(|t| t.0).collect::<Vec<_>>(), vec![1, 3, 2]);
+        // A was nearly tied between tokens 1 and 3, but B chose token 2, which A put 2 nats
+        // below its own choice: a confident flip, not a near-tie.
+        assert!((c[0].gap_ab - 2.0).abs() < 1e-6);
+        let s = summarize(&[&c]);
+        assert_eq!((s.flips, s.flips_near_tie, s.flips_confident), (1, 0, 1));
+    }
+
+    #[test]
+    fn cluster_interval_reduces_to_classic_t_for_equal_chunks() {
+        // chunk means 1, 2, 3, 4 (10 positions each): mean 2.5, s = 1.2910, se = 0.6455, t(3) = 3.182
+        let chunks = [(10.0, 10), (20.0, 10), (30.0, 10), (40.0, 10)];
+        let [lo, hi] = cluster_t_ci(&chunks).unwrap();
+        assert!((lo - (2.5 - 3.182 * 0.645497)).abs() < 1e-5, "{lo}");
+        assert!((hi - (2.5 + 3.182 * 0.645497)).abs() < 1e-5, "{hi}");
+        assert!(cluster_t_ci(&chunks[..1]).is_none());
+        // weighted: the centre is the position-weighted mean, not the mean of chunk means
+        let [lo, hi] = cluster_t_ci(&[(10.0, 10), (0.0, 30)]).unwrap();
+        assert!(lo <= 0.25 && 0.25 <= hi);
+        assert_eq!(t975(10), 2.228);
+        assert!((t975(25) - (2.086 + (2.042 - 2.086) * 0.5)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rel_err_basics() {
+        assert_eq!(rel_err_rows(&[3.0, 4.0], &[3.0, 4.0], 2), vec![0.0]);
+        assert!((rel_err_rows(&[3.0, 4.0], &[0.0, 0.0], 2)[0] - 1.0).abs() < 1e-7);
+    }
+}
