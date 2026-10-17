@@ -94,3 +94,12 @@ pub struct Info {
     pub head_k: usize,
     pub head_v: usize,
 }
+
+/// A loaded GGUF model. llama.cpp models are safe to share across threads;
+/// each `eval` builds its own context.
+pub struct Model {
+    ptr: *mut c_void,
+    pub info: Info,
+}
+
+unsafe impl Send for Model {}
