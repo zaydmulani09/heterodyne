@@ -263,3 +263,27 @@ pub struct Results {
     pub vocab: BTreeMap<i32, String>,
     pub warnings: Vec<String>,
 }
+
+/// Loaded models, keyed by path + size + mtime so a file rewritten in place is reloaded.
+#[derive(Default)]
+pub struct Models(HashMap<(String, u64, u128), Arc<Model>>);
+
+impl Models {
+    pub fn get(&mut self, path: &str) -> Result<Arc<Model>, String> {
+        let md = std::fs::metadata(path).map_err(|_| format!("model file not found: {path}"))?;
+        if !md.is_file() {
+            return Err(format!("not a file: {path}"));
+        }
+        let mtime = md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
+        let key = (path.to_string(), md.len(), mtime);
+        if let Some(m) = self.0.get(&key) {
+            return Ok(m.clone());
+        }
+        if self.0.len() >= 4 {
+            self.0.clear(); // ponytail: drop all; LRU if people juggle many models
+        }
+        let m = Arc::new(Model::load(Path::new(path))?);
+        self.0.insert(key, m.clone());
+        Ok(m)
+    }
+}
