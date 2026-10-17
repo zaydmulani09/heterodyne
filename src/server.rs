@@ -284,3 +284,19 @@ fn list_experiments(ws: &Path) -> Vec<Value> {
     out.sort_by(|a, b| b["created_unix"].as_u64().cmp(&a["created_unix"].as_u64()));
     out
 }
+
+fn state_json(st: &State) -> Value {
+    json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "llama_cpp_commit": env!("HD_LLAMA_COMMIT"),
+        "build": env!("HD_BUILD_FLAGS"),
+        "system_info": ffi::system_info(),
+        "model_dirs": st.model_dirs.iter().map(|d| d.to_string_lossy()).collect::<Vec<_>>(),
+        "models": list_models(&st.model_dirs),
+        "cache_types": ffi::CACHE_TYPES.iter().map(|t| t.0).collect::<Vec<_>>(),
+        "workspace": st.workspace.to_string_lossy(),
+        "experiments": list_experiments(&st.workspace),
+        "busy": lock(&st.jobs).values().any(|j| j.status == "running"),
+        "job": st.last_job,
+    })
+}
