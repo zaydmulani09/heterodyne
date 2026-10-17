@@ -411,3 +411,17 @@ fn job_json(st: &State, id: Option<u64>) -> Resp {
         None => err(404, "no such job"),
     }
 }
+
+fn save(st: &State, body: &str) -> Resp {
+    let e: Experiment = match serde_json::from_str(body) {
+        Ok(e) => e,
+        Err(m) => return err(400, &format!("not an experiment: {m}")),
+    };
+    if bundle::integrity(&e.request, &e.provenance, &e.results) != e.integrity {
+        return err(400, "the measurements no longer match their integrity checksum (edited or corrupted); not saved");
+    }
+    match bundle::save_to(&st.workspace, &e) {
+        Ok(name) => ok(json!({ "file": name })),
+        Err(m) => err(500, &m),
+    }
+}
