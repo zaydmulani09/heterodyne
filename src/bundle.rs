@@ -269,6 +269,8 @@ pub fn verify(
         note_max("layer map", max_diff_rows(&c0.layer_err, &c1.layer_err));
         note_max("transplant A into B", max_diff_rows(&c0.repair_denoise, &c1.repair_denoise));
         note_max("transplant B into A", max_diff_rows(&c0.repair_noise, &c1.repair_noise));
+        note_max("post-attention transplant A into B", max_diff_rows(&c0.repair_mid_denoise, &c1.repair_mid_denoise));
+        note_max("post-attention transplant B into A", max_diff_rows(&c0.repair_mid_noise, &c1.repair_mid_noise));
     }
     let outcome = if !shape_ok {
         notes.push("token sequences differ (tokenizer or generation changed)".into());
