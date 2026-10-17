@@ -85,6 +85,16 @@ finished run to the workspace immediately.
   quantized dot products. A PyTorch model with dequantized weights is a different model.
 - **Static llama.cpp, pinned.** The hook depends on scheduler behaviour and graph tensor
   names; pinning makes those testable facts instead of assumptions.
+- **The attention/MLP split restores the residual between blocks, not each block's output.**
+  Writing A's MLP output (`ffn_out-l`) into B removes that block's reaction to every upstream
+  difference as well as what the block itself changes, so a block with identical weights can
+  look responsible. Restoring A's whole residual at the split point and measuring the step
+  between consecutive points attributes divergence to the block that adds it. The steps
+  telescope: over all layers they sum to the untouched KL minus what remains after the last
+  layer. The tests check the case with a known answer: when the arms differ only in K-cache
+  type, which only attention reads, every MLP step is exactly zero. llama.cpp does not name
+  layer 0's input (`inp_embd` is the placeholder for raw embeddings, unused for token input),
+  so layer 0's attention step also holds any token-embedding difference.
 - **No GPU backend (yet).** On GPU backends the callback fires after async dispatch, reading
   forces device→host copies, and kernels differ; none of that has been validated.
 - **tiny_http + vanilla JS.** One local user, one job at a time; no async runtime or
