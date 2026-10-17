@@ -280,9 +280,34 @@ fn print_summary(e: &bundle::Experiment) {
         }
     }
     if let (Some(ls), Some(d), Some(n)) = (&r.repair_layers, &r.repair_denoise_mean, &r.repair_noise_mean) {
-        println!("transplant  layer  KL(A‖B+A's residual)  KL(A‖A+B's residual)");
-        for ((l, d), n) in ls.iter().zip(d).zip(n) {
-            println!("            {l:>5}  {d:>20.6}  {n:>20.6}");
+        if let (Some(md), Some(mn)) = (&r.repair_mid_denoise_mean, &r.repair_mid_noise_mean) {
+            println!("transplant  layer  KL(A‖B+A's residual)           KL(A‖A+B's residual)");
+            println!("                   after attention  after layer  after attention  after layer");
+            for (i, l) in ls.iter().enumerate() {
+                println!("            {l:>5}  {:>15.6}  {:>11.6}  {:>15.6}  {:>11.6}", md[i], d[i], mn[i], n[i]);
+            }
+            // Each block's share is the step in KL as the transplant point moves past it.
+            let split = |pre0: f64, mid: &[f32], post: &[f32]| {
+                let (mut pre, mut attn, mut mlp) = (pre0, 0.0, 0.0);
+                for (&m, &p) in mid.iter().zip(post) {
+                    (attn, mlp, pre) = (attn + pre - m as f64, mlp + m as f64 - p as f64, p as f64);
+                }
+                (attn, mlp)
+            };
+            let (a, m) = split(s.mean_kl, md, d);
+            println!(
+                "attention vs MLP, restoring A in B: of mean KL {:.6}, attention blocks remove {a:.6}, MLP blocks {m:.6}, {:.6} is left after the last layer",
+                s.mean_kl,
+                d[d.len() - 1]
+            );
+            let (a, m) = split(0.0, mn, n);
+            println!("attention vs MLP, injecting B into A: attention blocks add {:.6}, MLP blocks {:.6}", -a, -m);
+            println!("  (layer 0's attention share includes any difference in the token embeddings)");
+        } else {
+            println!("transplant  layer  KL(A‖B+A's residual)  KL(A‖A+B's residual)");
+            for ((l, d), n) in ls.iter().zip(d).zip(n) {
+                println!("            {l:>5}  {d:>20.6}  {n:>20.6}");
+            }
         }
     }
     if let Some(at) = &r.attribution {
