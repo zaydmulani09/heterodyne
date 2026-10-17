@@ -459,3 +459,12 @@ function heat(rows, toT, label, rowNames) {
   cv.addEventListener("click", (ev) => { const p = at(ev); if (p) select(p[1]); });
   return cv;
 }
+
+function distList(list, color, target) {
+  return list.map(([id, lp]) => {
+    const p = Math.exp(lp);
+    return h("div", { class: "bar-row" + (id === target ? " target" : "") },
+      h("span", { class: "tok", title: JSON.stringify(tok(id)) }, h("i", { style: `width:${(100 * p).toFixed(1)}%;background:${color}` }), h("span", {}, vis(tok(id)))),
+      h("span", { class: "p" }, p >= 0.001 ? (100 * p).toFixed(1) + "%" : "<0.1%"));
+  });
+}
