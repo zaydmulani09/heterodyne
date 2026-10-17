@@ -311,3 +311,13 @@ impl Drop for Model {
 pub fn system_info() -> String {
     unsafe { CStr::from_ptr(hd_system_info()) }.to_string_lossy().trim().to_string()
 }
+
+/// Quantize a GGUF with llama.cpp's own quantizer (`ftype` = llama_ftype value).
+pub fn quantize(input: &Path, output: &Path, ftype: i32, nthread: i32) -> Result<(), String> {
+    let i = cstr(&input.to_string_lossy())?;
+    let o = cstr(&output.to_string_lossy())?;
+    match unsafe { hd_quantize(i.as_ptr(), o.as_ptr(), ftype, nthread) } {
+        0 => Ok(()),
+        rc => Err(format!("llama_model_quantize failed ({rc})")),
+    }
+}
