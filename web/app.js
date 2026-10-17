@@ -149,3 +149,19 @@ function fillForm(r) {
   $("#stride").value = r.repair_stride; $("#attribution").checked = r.attribution;
   $("#skip").value = r.skip_first ?? 0;
 }
+
+async function loadState() {
+  S.state = await api("/api/state");
+  const st = S.state;
+  $("#build").textContent = `v${st.version}, llama.cpp ${st.llama_cpp_commit.slice(0, 8)} (${st.build} CPU build)`;
+  $("#build").title = st.system_info;
+  for (const p of ["a", "b"]) for (const f of ["ctk", "ctv"]) {
+    const sel = $(`#${p}-${f}`);
+    if (sel.options.length) continue;
+    for (const t of st.cache_types) sel.append(h("option", { value: t }, t));
+    sel.value = "f16";
+  }
+  $("#model-list").replaceChildren(...st.models.map((m) => h("option", { value: m.path }, `${m.name} (${(m.bytes / 1e9).toFixed(2)} GB)`)));
+  $("#workspace").textContent = `Stored in ${st.workspace}`;
+  renderHistory();
+}
