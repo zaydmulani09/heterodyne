@@ -182,3 +182,19 @@ pub fn load(path: &Path) -> Result<Experiment, String> {
     }
     Ok(e)
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VerifyReport {
+    /// The stored results still hash to the stored integrity value.
+    pub integrity_ok: bool,
+    /// "exact" | "approximate" | "not-reproducible"
+    pub outcome: String,
+    pub same_llama_build: bool,
+    pub same_system_info: bool,
+    pub max_abs_kl_diff: f64,
+    pub top1_changes: usize,
+    /// Largest absolute difference per stored array (per-token KL, floor, layer map, transplants).
+    #[serde(default)]
+    pub max_abs_diff: std::collections::BTreeMap<String, f64>,
+    pub notes: Vec<String>,
+}
