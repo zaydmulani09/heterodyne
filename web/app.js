@@ -545,3 +545,13 @@ function attributionPanel(at) {
       ? `Switching only ${minimal.switched.join(" and ")} already diverges as much as switching everything (${(minimal.mean_kl / full.mean_kl).toFixed(2)}× the full divergence): the settings do not add.`
       : `Switching only ${minimal.switched.join(" and ")} accounts for ${(100 * minimal.mean_kl / full.mean_kl).toFixed(0)}% of the full divergence on this text.`));
 }
+
+function generationPanel(g, c) {
+  const col = (cls, label, toks, other) => h("div", { class: cls }, h("h3", {}, label),
+    h("pre", {}, toks.map((t, k) => (k === g.fork ? h("mark", { title: other[k] != null ? `other arm: ${JSON.stringify(tok(other[k]))}` : "other arm stopped" }, tok(t)) : tok(t)))));
+  const forkAt = g.fork == null ? null : g.prompt_tokens.length + g.fork - 1;
+  return panel("Greedy answers",
+    g.fork == null ? `Both arms generated the same ${g.a.length} tokens.` : `The arms first disagree at generated token ${g.fork}. The scored text is A's answer, re-read by both arms.${g.fork_gap_a != null ? ` At the fork A preferred its own token over B's by ${g.fork_gap_a.toFixed(3)} nats.` : ""}${g.fork_reproduced === false ? " Re-scoring the whole sequence in one batch does not reproduce both choices: incremental decoding and batched scoring compute slightly different numbers." : ""}`,
+    h("div", { class: "gen" }, col("ga", "A answered", g.a, g.b), col("gb", "B answered", g.b, g.a)),
+    forkAt != null && forkAt < c.pos.length && h("div", { class: "actions" }, h("button", { class: "quiet", type: "button", onclick: () => select(forkAt) }, "Inspect the fork")));
+}
