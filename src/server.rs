@@ -317,3 +317,33 @@ fn new_job(st: &mut State, kind: &str) -> Result<(u64, Arc<AtomicBool>), Resp> {
     );
     Ok((id, cancel))
 }
+
+fn spawn<F>(st: &State, id: u64, f: F)
+where
+    F: FnOnce(&mut Models, &dyn Fn(crate::analysis::Progress)) -> Result<Value, String> + Send + 'static,
+{
+    let jobs = st.jobs.clone();
+    let models = st.models.clone();
+    std::thread::spawn(move || {
+        let jobs2 = jobs.clone();
+        let progress = move |p: crate::analysis::Progress| {
+            if let Some(j) = lock(&jobs2).get_mut(&id) {
+                (j.done, j.total, j.stage) = (p.done, p.total, p.stage.to_string());
+            }
+        };
+        // A panic must not leave the job "running" forever and block every later run.
+        let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut lock(&models), &progress))).unwrap_or_else(|p| {
+            Err(format!(
+                "internal error: {}",
+                p.downcast_ref::<&str>().copied().or(p.downcast_ref::<String>().map(|s| s.as_str())).unwrap_or("panic")
+            ))
+        });
+        if let Some(j) = lock(&jobs).get_mut(&id) {
+            match out {
+                Ok(v) => (j.status, j.result) = ("done".into(), Some(v)),
+                Err(e) if e == "cancelled" => j.status = "cancelled".into(),
+                Err(e) => (j.status, j.error) = ("error".into(), Some(e)),
+            }
+        }
+    });
+}
