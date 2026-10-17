@@ -221,3 +221,71 @@ fn find_model(id: &ModelId, search: &[PathBuf]) -> Result<String, String> {
     }
     Err(format!("no file with sha256 {} found for '{}' (pass --search DIR)", &id.sha256[..12], id.file_name))
 }
+
+/// Re-run the stored request and compare every number.
+pub fn verify(
+    e: &Experiment,
+    search: &[PathBuf],
+    models: &mut Models,
+    progress: &dyn Fn(analysis::Progress),
+) -> Result<VerifyReport, String> {
+    let integrity_ok = integrity(&e.request, &e.provenance, &e.results) == e.integrity;
+    let mut req = e.request.clone();
+    req.a.model = find_model(&e.provenance.a, search)?;
+    req.b.model = find_model(&e.provenance.b, search)?;
+    let now = provenance(models, &req)?;
+    let res = analysis::run(&req, models, &AtomicBool::new(false), progress)?;
+    let mut notes = vec![];
+    if !integrity_ok {
+        notes.push("stored results do not match their integrity hash: the file was edited or corrupted".into());
+    }
+    let same_llama_build = now.llama_cpp_commit == e.provenance.llama_cpp_commit && now.build == e.provenance.build;
+    let same_system_info = now.system_info == e.provenance.system_info;
+    if !same_llama_build {
+        notes.push(format!(
+            "llama.cpp build differs: recorded {} ({}), now {} ({})",
+            e.provenance.llama_cpp_commit, e.provenance.build, now.llama_cpp_commit, now.build
+        ));
+    }
+    if !same_system_info {
+        notes.push("CPU feature set differs; kernels with different summation order can change low-order bits".into());
+    }
+    let (mut max_abs, mut flips, mut shape_ok) = (0f64, 0usize, res.chunks.len() == e.results.chunks.len());
+    let mut by_array = std::collections::BTreeMap::new();
+    let mut note_max = |name: &str, d: Option<f64>| {
+        if let Some(d) = d {
+            let m = by_array.entry(name.to_string()).or_insert(0f64);
+            *m = m.max(d);
+        }
+    };
+    for (c0, c1) in e.results.chunks.iter().zip(&res.chunks) {
+        shape_ok &= c0.tokens == c1.tokens;
+        for (p0, p1) in c0.pos.iter().zip(&c1.pos) {
+            max_abs = max_abs.max((p0.kl - p1.kl).abs());
+            flips += (p0.top_a != p1.top_a || p0.top_b != p1.top_b) as usize;
+        }
+        note_max("kl", Some(max_abs));
+        note_max("floor", max_diff_rows(&c0.floor_kl.clone().map(|v| vec![v]), &c1.floor_kl.clone().map(|v| vec![v])));
+        note_max("layer map", max_diff_rows(&c0.layer_err, &c1.layer_err));
+        note_max("transplant A into B", max_diff_rows(&c0.repair_denoise, &c1.repair_denoise));
+        note_max("transplant B into A", max_diff_rows(&c0.repair_noise, &c1.repair_noise));
+    }
+    let outcome = if !shape_ok {
+        notes.push("token sequences differ (tokenizer or generation changed)".into());
+        "not-reproducible"
+    } else if res == e.results {
+        "exact"
+    } else {
+        "approximate"
+    };
+    Ok(VerifyReport {
+        integrity_ok,
+        outcome: outcome.into(),
+        same_llama_build,
+        same_system_info,
+        max_abs_kl_diff: max_abs,
+        top1_changes: flips,
+        max_abs_diff: by_array,
+        notes,
+    })
+}
