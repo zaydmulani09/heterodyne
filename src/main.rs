@@ -293,3 +293,7 @@ fn print_summary(e: &bundle::Experiment) {
         println!("warning: {w}");
     }
 }
+
+fn settings(a: &Arm) -> String {
+    format!("ctk={} ctv={} fa={} ub={} threads={}", a.cache_k, a.cache_v, a.flash_attn, a.ubatch, a.threads)
+}
