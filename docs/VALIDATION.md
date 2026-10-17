@@ -53,3 +53,19 @@ The curve falls steadily, not in one step. In this model and on this text, Q4_K_
 divergence builds up across many layers rather than coming from one. What is left after
 the final layer (0.0012) is the quantized output head's own contribution. This is one
 text and one model; it is an observation, not a law.
+
+## 3. Runtime settings change outputs (manual, llama-perplexity, Qwen2.5-0.5B)
+
+Measured with stock `llama-perplexity --kl-divergence`, c=256, Q4_K_M as both base and
+variant, before heterodyne existed. These motivated the "arm = file + settings" design:
+
+| B differs from A by | mean KLD | same top token |
+|---|---|---|
+| `-t 3` instead of `-t 8` | 0.000001 | 99.89% |
+| `-ub 64 -b 64` | 0.00086 | 98.65% |
+| `-ctk q8_0 -ctv q8_0 -fa on` | 0.0266 | 92.01% |
+| (Q4_K_M weights vs F16, for scale) | 0.0387 | 91.29% |
+
+The thread-count row is not zero only because llama-perplexity stores its base logits as
+16-bit compressed log-probs; that storage alone produces 0.11% "flips". heterodyne keeps
+f32 logits in memory and computes KL in f64, so identical runs give exactly 0 (test above).
