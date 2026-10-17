@@ -206,3 +206,20 @@ async function poll(id) {
   else if (j.kind === "run") { showExperiment(j.result.experiment, j.result.file); loadState().catch(() => {}); }
   else showVerify(j.result);
 }
+
+function announce(msg) {
+  const live = $("#live");
+  if (live.textContent !== msg) live.textContent = msg;
+}
+
+function renderProgress(j, id) {
+  announce(j.stage);
+  const frac = j.total ? j.done / j.total : 0;
+  const box = $(".progress") || h("div", { class: "progress" });
+  box.replaceChildren(
+    h("h2", {}, j.kind === "verify" ? "Re-running the saved experiment" : "Running both arms"),
+    h("div", { class: "meter", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": j.total || 1, "aria-valuenow": j.done }, h("div", { style: `width:${(100 * frac).toFixed(1)}%` })),
+    h("p", { class: "status" }, j.total ? `${j.stage}: pass ${j.done} of ${j.total}` : j.stage),
+    h("button", { class: "quiet", type: "button", onclick: () => api(`/api/cancel?id=${id}`, {}) }, "Cancel"));
+  if (!box.isConnected) main.replaceChildren(box);
+}
