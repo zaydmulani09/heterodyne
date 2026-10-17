@@ -1,0 +1,70 @@
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/archivo-wdth.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fragment Mono";
+  src: url("/fonts/fragment-mono.woff2") format("woff2");
+  font-display: swap;
+}
+
+/* Chart-recorder paper, two pens (A blue, B red), divergence in its own violet ramp. */
+:root {
+  --paper: #eef1f4;
+  --panel: #f8fafb;
+  --grid: #d8dee5;
+  --rule: #c3ccd5;
+  --ink: #17202b;
+  --muted: #5a6573;
+  --a: #1f5fad;
+  --b: #c23a22;
+  --a-soft: #dce7f5;
+  --b-soft: #f6dfda;
+  --floor: #5f6b78;
+  --ok: #2c7a4b;
+  --warn: #9a5b00;
+  --font: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Fragment Mono", ui-monospace, "Cascadia Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #11161c;
+    --panel: #171e26;
+    --grid: #26303b;
+    --rule: #34404c;
+    --ink: #e3e8ed;
+    --muted: #94a1af;
+    --a: #74a9ee;
+    --b: #f07e66;
+    --a-soft: #1d2e44;
+    --b-soft: #3d241f;
+    --floor: #6f7b88;
+    --ok: #6cc28f;
+    --warn: #e0a64a;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { font-size: 15px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+h1, h2, h3 { font-weight: 600; line-height: 1.2; margin: 0; }
+h1 { font-size: 1.6rem; font-stretch: 88%; }
+h2 { font-size: 1.15rem; font-stretch: 85%; }
+h3 { font-size: 1rem; font-stretch: 85%; }
+p { margin: 0 0 0.6em; max-width: 72ch; }
+a { color: var(--a); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
