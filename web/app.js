@@ -82,3 +82,13 @@ function rampCss() {
 
 // ---------- setup form ----------
 const ARM_FIELDS = ["ctk", "ctv", "fa", "ub", "threads"];
+function readArm(p) {
+  return {
+    model: $(`#${p}-model`).value.trim(),
+    cache_k: $(`#${p}-ctk`).value,
+    cache_v: $(`#${p}-ctv`).value,
+    flash_attn: $(`#${p}-fa`).value,
+    ubatch: +$(`#${p}-ub`).value || 0,
+    threads: Math.max(1, +$(`#${p}-threads`).value || 1),
+  };
+}
