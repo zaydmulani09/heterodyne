@@ -126,3 +126,14 @@ button {
 button.quiet { background: transparent; color: var(--ink); border-color: var(--rule); font-weight: 500; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 .run { width: 100%; padding: 0.6rem; font-size: 1rem; }
+
+/* History */
+.history { margin-top: 1.6rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+.history ul { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.history li button {
+  width: 100%; text-align: left; overflow-wrap: anywhere; background: transparent; color: var(--ink); border: 0; border-left: 3px solid transparent;
+  padding: 0.35rem 0.5rem; font-weight: 500; border-radius: 0;
+}
+.history li button:hover { background: var(--paper); }
+.history li button[aria-current=true] { border-left-color: var(--ink); background: var(--paper); }
+.history .meta { display: block; font-size: 0.76rem; color: var(--muted); font-stretch: 85%; }
