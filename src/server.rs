@@ -91,3 +91,16 @@ pub fn serve(opts: Options) -> Result<(), String> {
     }
     Ok(())
 }
+
+fn open_browser(url: &str) {
+    let r = if cfg!(windows) {
+        std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn()
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open").arg(url).spawn()
+    } else {
+        std::process::Command::new("xdg-open").arg(url).spawn()
+    };
+    if r.is_err() {
+        eprintln!("could not open a browser; visit {url}");
+    }
+}
