@@ -287,3 +287,13 @@ impl Models {
         Ok(m)
     }
 }
+
+pub struct Progress<'a> {
+    pub done: usize,
+    pub total: usize,
+    pub stage: &'a str,
+}
+
+fn l_out(l: usize) -> String {
+    format!("l_out-{l}")
+}
