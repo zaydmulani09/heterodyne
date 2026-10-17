@@ -177,4 +177,28 @@ int32_t hd_meta(void * m, const char * key, char * buf, int32_t cap) {
     return llama_model_meta_val_str((llama_model *) m, key, buf, cap);
 }
 
+int32_t hd_tokenize(void * m, const char * text, int32_t len, int32_t add_special, int32_t parse_special, int32_t * out, int32_t cap) {
+    return llama_tokenize(llama_model_get_vocab((llama_model *) m), text, len, out, cap, add_special != 0, parse_special != 0);
+}
+
+int32_t hd_piece(void * m, int32_t tok, char * buf, int32_t cap) {
+    return llama_token_to_piece(llama_model_get_vocab((llama_model *) m), tok, buf, cap, 0, true);
+}
+
+int32_t hd_is_eog(void * m, int32_t tok) {
+    return llama_vocab_is_eog(llama_model_get_vocab((llama_model *) m), tok) ? 1 : 0;
+}
+
+// 1 if both vocabularies have identical token texts, else 0.
+int32_t hd_vocab_equal(void * a, void * b) {
+    auto * va = llama_model_get_vocab((llama_model *) a);
+    auto * vb = llama_model_get_vocab((llama_model *) b);
+    const int32_t n = llama_vocab_n_tokens(va);
+    if (n != llama_vocab_n_tokens(vb)) return 0;
+    for (int32_t i = 0; i < n; i++) {
+        if (strcmp(llama_vocab_get_text(va, i), llama_vocab_get_text(vb, i)) != 0) return 0;
+    }
+    return 1;
+}
+
 }  // extern "C"
