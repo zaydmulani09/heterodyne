@@ -323,3 +323,11 @@ fn chunks_for(m: &Model, text: &str, chunk: usize, max_chunks: usize) -> Result<
     }
     Ok((out, body.len().saturating_sub(step * max_chunks)))
 }
+
+/// An odd ubatch near half of `ub` (or of the chunk): odd sizes force llama.cpp's CPU kernels
+/// onto their remainder paths, so this split changes summation order wherever it can.
+fn floor_split(cfg_ubatch: i32, n: usize) -> i32 {
+    let base = if cfg_ubatch <= 0 || cfg_ubatch as usize >= n { n as i32 } else { cfg_ubatch };
+    let half = (base + 1) / 2;
+    (if half % 2 == 0 { half + 1 } else { half }).clamp(1, (n as i32 - 1).max(1))
+}
