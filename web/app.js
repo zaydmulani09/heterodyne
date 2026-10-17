@@ -307,3 +307,13 @@ function render() {
   main.replaceChildren(head, readout, tabs || "", work, notesPanel(), provenancePanel());
   if (keep != null) $(".tokens").scrollTop = keep;
 }
+
+function cell(dt, dd, small) {
+  return h("div", {}, h("dt", {}, dt), h("dd", {}, dd, small && h("small", {}, small)));
+}
+function panel(title, explain, ...body) {
+  return h("section", { class: "panel" }, h("header", {}, h("h2", {}, title)), h("p", { class: "explain" }, explain), ...body);
+}
+function legendKL() {
+  return h("div", { class: "legend" }, h("span", { class: "key" }, "KL", h("span", { class: "ramp", style: `background:${rampCss()}` }), "10⁻⁵ to 10 nats"));
+}
