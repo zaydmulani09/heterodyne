@@ -215,3 +215,31 @@ fn bad_requests_are_rejected_before_running() {
     req.a.model = env!("CARGO_MANIFEST_DIR").to_string() + "/Cargo.toml";
     assert!(analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap_err().contains("not a GGUF"));
 }
+
+#[test]
+fn experiment_roundtrips_and_verifies_exactly() {
+    let Some(p) = fixture() else { return };
+    let (a, b) = (p.to_string_lossy().into_owned(), quantized().to_string_lossy().into_owned());
+    let mut req = request(&a, &b);
+    req.repair = false;
+    let mut models = Models::default();
+    let e = bundle::record(req, Notes::default(), &mut models, &AtomicBool::new(false), &|_| {}).unwrap();
+    let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("heterodyne-test-{}.json", std::process::id()));
+    std::fs::write(&path, serde_json::to_string_pretty(&e).unwrap()).unwrap();
+    let back = bundle::load(&path).unwrap();
+    assert!(back == e, "JSON roundtrip changed the experiment");
+    let rep = bundle::verify(&back, &[], &mut models, &|_| {}).unwrap();
+    assert!(rep.integrity_ok);
+    assert_eq!(rep.outcome, "exact", "{:?}", rep.notes);
+
+    let mut tampered = back.clone();
+    tampered.results.summary.mean_kl *= 0.5;
+    assert_ne!(bundle::integrity(&tampered.request, &tampered.provenance, &tampered.results), tampered.integrity);
+
+    // Moving the model files is not tampering: locations are outside the hash, identity is not.
+    let mut moved = back.clone();
+    moved.request.a.model = "elsewhere/model.gguf".into();
+    assert_eq!(bundle::integrity(&moved.request, &moved.provenance, &moved.results), moved.integrity);
+    moved.provenance.b.sha256 = "0".repeat(64);
+    assert_ne!(bundle::integrity(&moved.request, &moved.provenance, &moved.results), moved.integrity);
+}
