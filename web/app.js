@@ -349,3 +349,50 @@ function tipAt(ev, text) {
   t.style.left = Math.min(innerWidth - t.offsetWidth - 8, ev.clientX + 12) + "px";
   t.style.top = ev.clientY + 14 + "px";
 }
+
+function stripChart(c) {
+  const W = plotWidth(), H = 170;
+  const n = c.pos.length, pw = W - M.l - M.r, step = pw / n;
+  const maxKL = Math.max(1e-6, ...c.pos.map((p) => p.kl));
+  const lo = -6, hi = Math.max(0, Math.ceil(Math.log10(maxKL)));
+  const y = (kl) => M.t + (H - M.t - M.b) * (1 - (Math.log10(Math.max(kl, 10 ** lo)) - lo) / (hi - lo));
+  const x = (i) => M.l + (i + 0.5) * step;
+  const svg = s("svg", { class: "plot", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "KL divergence per position" });
+  const grid = s("g", { class: "grid axis" });
+  for (let d = lo; d <= hi; d++) {
+    grid.append(s("line", { x1: M.l, x2: W - M.r, y1: y(10 ** d), y2: y(10 ** d) }), s("text", { x: M.l - 6, y: y(10 ** d) + 3.5, "text-anchor": "end" }, `1e${d}`));
+  }
+  for (let i = 0; i < n; i += Math.max(1, Math.round(n / 8))) grid.append(s("text", { x: x(i), y: H - 6, "text-anchor": "middle" }, i));
+  svg.append(grid);
+  const k = Math.min(skipN(), n);
+  if (k) svg.append(s("rect", { x: M.l, y: M.t - 10, width: k * step, height: H - M.b - M.t + 10, fill: "var(--grid)", opacity: 0.45 }),
+    s("text", { x: M.l + 3, y: H - M.b - 4, class: "axis-label" }, "not counted"));
+  const bars = s("g");
+  c.pos.forEach((p, i) => {
+    if (p.kl <= 0) return;
+    bars.append(s("rect", { x: x(i) - Math.max(0.5, step * 0.4), width: Math.max(1, step * 0.8), y: y(p.kl), height: Math.max(0.5, y(10 ** lo) - y(p.kl)), fill: ramp(0.25 + 0.75 * klT(p.kl)), opacity: i < k ? 0.35 : null }));
+  });
+  svg.append(bars);
+  if (c.floor_kl) {
+    svg.append(s("polyline", { points: c.floor_kl.map((k, i) => `${x(i)},${y(k)}`).join(" "), fill: "none", stroke: "var(--floor)", "stroke-width": 1.2 }));
+  }
+  c.pos.forEach((p, i) => {
+    if (p.top_a === p.top_b) return;
+    const tie = gap(p) < 0.25;
+    svg.append(s("path", { d: `M${x(i) - 3.5},${M.t - 9} L${x(i) + 3.5},${M.t - 9} L${x(i)},${M.t - 3} Z`, fill: tie ? "none" : "var(--b)", stroke: "var(--b)", "stroke-width": 1 }));
+  });
+  svg.append(s("line", { x1: x(S.sel), x2: x(S.sel), y1: M.t - 10, y2: H - M.b, stroke: "var(--ink)", "stroke-width": 1.2 }));
+  const hit = (ev) => {
+    const r = svg.getBoundingClientRect();
+    return Math.floor(((ev.clientX - r.left) * (W / r.width) - M.l) / step);
+  };
+  svg.addEventListener("mousemove", (ev) => {
+    const i = hit(ev);
+    if (i < 0 || i >= n) return tipAt(ev, null);
+    const p = c.pos[i], next = c.tokens[i + 1];
+    tipAt(ev, `pos ${i} → ${next != null ? vis(tok(next)) : "(after the text)"}\nKL ${fmtKL(p.kl)}${p.top_a !== p.top_b ? `\nA: ${vis(tok(p.top_a))}  B: ${vis(tok(p.top_b))}` : ""}`);
+  });
+  svg.addEventListener("mouseleave", (ev) => tipAt(ev, null));
+  svg.addEventListener("click", (ev) => { const i = hit(ev); if (i >= 0 && i < n) select(i); });
+  return svg;
+}
