@@ -140,3 +140,27 @@ pub fn integrity(req: &Request, prov: &Provenance, res: &Results) -> String {
     h.update(serde_json::to_vec(res).unwrap());
     hex(&h.finalize())
 }
+
+/// Run a request end to end and package it.
+pub fn record(
+    req: Request,
+    notes: Notes,
+    models: &mut Models,
+    cancel: &AtomicBool,
+    progress: &dyn Fn(analysis::Progress),
+) -> Result<Experiment, String> {
+    let t0 = std::time::Instant::now();
+    let provenance = provenance(models, &req)?;
+    let results = analysis::run(&req, models, cancel, progress)?;
+    let integrity = integrity(&req, &provenance, &results);
+    Ok(Experiment {
+        schema: SCHEMA.into(),
+        created_unix: SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()),
+        notes,
+        request: req,
+        provenance,
+        elapsed_ms: t0.elapsed().as_millis() as u64,
+        results,
+        integrity,
+    })
+}
