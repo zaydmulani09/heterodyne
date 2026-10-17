@@ -23,3 +23,22 @@ Everything runs locally on the CPU, in the same quantized kernels you actually r
 No API keys, no uploads, no Python.
 
 ![heterodyne comparing Qwen3-0.6B BF16 with Q4_K_M, inspecting a confident flip in is_prime](docs/screenshot-light.png)
+
+## Why another tool
+
+Interpretability tools (TransformerLens, nnsight, NDIF Workbench, Neuronpedia) run PyTorch.
+On CPU, llama.cpp quantizes *activations* to 8 bits before every quantized matmul, so a
+PyTorch model with dequantized weights is a different model from the one you run.
+llama.cpp itself has no public API for per-layer hidden states (#27112), and its KL tool,
+`llama-perplexity --kl-divergence`, reports aggregates, keeps every base logit in memory and on
+disk, and stores them compressed (on Qwen2.5-0.5B that storage alone shows up as 0.11% "flips").
+The research behind this choice, with sources, is in [docs/DECISION.md](docs/DECISION.md).
+
+| | per-token view | inside the network | interventions | llama.cpp's own numerics | where it runs |
+|---|---|---|---|---|---|
+| `llama-perplexity --kl-divergence` | no (aggregates) | no | no | yes | any llama.cpp backend |
+| [mlx-kld](https://github.com/sammcj/mlx-kld) | per-token arrays, most divergent tokens | no | no | no (MLX) | Apple silicon |
+| NDIF Workbench / nnsight / TransformerLens | yes | yes | yes | no (PyTorch) | local PyTorch or NDIF's remote GPUs |
+| [jlens-gguf](https://github.com/igorbarshteyn/jlens-gguf) | one model | yes (Jacobian lens) | steering, single model | yes | CPU (llama.cpp) |
+| [Thireus GGUF-Tool-Suite](https://github.com/Thireus/GGUF-Tool-Suite) | no | per-tensor PPL/KLD sweeps | requantize per tensor | yes (ik_llama.cpp) | llama.cpp backends |
+| **heterodyne** | **yes, A vs B** | **yes, A vs B** | **cross-arm transplants** | **yes** | **CPU (llama.cpp)** |
