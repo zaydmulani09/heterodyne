@@ -341,3 +341,11 @@ function select(i) {
   const t = $(".tokens span.sel");
   if (t) t.scrollIntoView({ block: "nearest" });
 }
+
+function tipAt(ev, text) {
+  const t = $("#tip");
+  if (!text) { t.hidden = true; return; }
+  t.textContent = text; t.hidden = false;
+  t.style.left = Math.min(innerWidth - t.offsetWidth - 8, ev.clientX + 12) + "px";
+  t.style.top = ev.clientY + 14 + "px";
+}
