@@ -57,3 +57,11 @@ function ramp(t) {
   const i = Math.min(st.length - 2, Math.floor(t)), f = t - i, a = st[i], b = st[i + 1];
   return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
 }
+// Text colour with the higher WCAG contrast against an rgb() background.
+function inkOn(rgb) {
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const [r, g, b] = rgb.match(/\d+/g).map(Number);
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return (1.05) / (L + 0.05) > (L + 0.05) / (0.0075 + 0.05) ? "#ffffff" : "#11161c";
+}
+const KL_LO = -5, KL_HI = 1; // colour scale: 1e-5 .. 10 nats, fixed so experiments compare
