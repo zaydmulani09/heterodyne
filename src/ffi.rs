@@ -301,3 +301,13 @@ impl Model {
         Ok(out)
     }
 }
+
+impl Drop for Model {
+    fn drop(&mut self) {
+        unsafe { hd_model_free(self.ptr) }
+    }
+}
+
+pub fn system_info() -> String {
+    unsafe { CStr::from_ptr(hd_system_info()) }.to_string_lossy().trim().to_string()
+}
