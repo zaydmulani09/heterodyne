@@ -42,3 +42,17 @@ struct State {
     /// The most recent job, so a reloaded page can reattach to it.
     last_job: Option<u64>,
 }
+
+/// Lock a mutex even if a panicking thread poisoned it; the data is still usable here.
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn random_token() -> String {
+    let h = |i: u64| {
+        let mut s = std::collections::hash_map::RandomState::new().build_hasher();
+        s.write_u64(i);
+        s.finish()
+    };
+    format!("{:016x}{:016x}", h(1), h(2))
+}
