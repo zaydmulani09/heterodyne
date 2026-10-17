@@ -102,3 +102,12 @@ These results are for Qwen3-0.6B, 128-token chunks, on this CPU. Divisibility by
 general rule: with flash attention on, an earlier run with 256-token chunks saw a small
 difference (mean KL 1.3e-5) at ubatch 64, coming from a 76-token final chunk split 64 + 12,
 so the flash-attention path has size dependence of its own.
+
+## 5. Determinism across separate runs
+
+The BF16 vs Q4_K_M comparison in `examples/` was recorded twice by separate processes (once
+with layer captures and transplants, once in the quant ladder without): mean KL, flips and
+perplexity are identical to every printed digit (0.067050, 149 flips, 7.825 / 8.534).
+`verify` compares all stored numbers for exact equality;
+`experiment_roundtrips_and_verifies_exactly` exercises it in CI. Every file in `examples/` was
+re-run with `heterodyne verify` on the recording machine; see the results in section 7.
