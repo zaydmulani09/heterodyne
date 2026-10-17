@@ -228,3 +228,34 @@ fn handle(st: &mut State, req: &mut tiny_http::Request) -> Resp {
         _ => err(404, "not found"),
     }
 }
+
+/// A file name inside the workspace (no separators, .json only).
+fn ws_file(st: &State, name: &str) -> Option<PathBuf> {
+    let ok = !name.is_empty() && name.ends_with(".json") && !name.contains(['/', '\\', ':']) && !name.starts_with('.');
+    ok.then(|| st.workspace.join(name))
+}
+
+fn list_models(dirs: &[PathBuf]) -> Vec<Value> {
+    let mut out = vec![];
+    let mut visit = |d: &Path| {
+        if let Ok(rd) = std::fs::read_dir(d) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.extension().map_or(false, |x| x.eq_ignore_ascii_case("gguf")) {
+                    let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                    out.push(json!({ "path": p.to_string_lossy(), "name": e.file_name().to_string_lossy(), "bytes": size }));
+                }
+            }
+        }
+    };
+    for d in dirs {
+        visit(d);
+        if let Ok(rd) = std::fs::read_dir(d) {
+            for e in rd.flatten().filter(|e| e.path().is_dir()) {
+                visit(&e.path());
+            }
+        }
+    }
+    out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    out
+}
