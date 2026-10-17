@@ -494,3 +494,36 @@ function repairCurve(c, i) {
     h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--ink)" }), "untouched KL"),
     floor != null && h("span", { class: "key" }, h("span", { class: "sw", style: "background:var(--floor)" }), "floor")));
 }
+
+function inspector(c) {
+  const i = S.sel, p = c.pos[i], next = c.tokens[i + 1];
+  const ctx = c.tokens.slice(Math.max(0, i - 14), i + 1).map(tok).join("");
+  const flip = p.top_a !== p.top_b;
+  const g = gap(p), tie = flip && g < 0.25, confident = flip && g >= 1;
+  const floor = c.floor_kl ? c.floor_kl[i] : null;
+  let verdict;
+  if (p.kl === 0) verdict = "Both arms produced exactly the same distribution here.";
+  else if (tie) verdict = `B picks a different top token, one that A rated within ${g.toFixed(2)} nats of its own choice (a near-tie by heterodyne's 0.25-nat convention). One flip like this says little on its own.`;
+  else if (confident) verdict = `B's top token is one A rated ${g.toFixed(2)} nats below its own choice (confident by the 1-nat convention). Worth checking on other inputs.`;
+  else if (flip) verdict = `B picks a different top token; A preferred its own by ${g.toFixed(2)} nats.`;
+  else if (floor != null && floor > 0 && p.kl <= 2 * floor) verdict = "Same top token, and the divergence is within twice the numerical floor at this position.";
+  else verdict = "Same top token; the arms differ in how the remaining probability is spread.";
+  const lastErr = c.layer_err ? c.layer_err[c.layer_err.length - 1][i] : null;
+  return h("aside", { class: "inspector", "aria-label": "Selected position" },
+    h("h3", {}, `Position ${i}`),
+    h("div", { class: "ctx" }, vis(ctx.slice(-120)), next != null ? h("mark", {}, vis(tok(next))) : h("mark", {}, "after the text")),
+    h("div", { class: "dist" },
+      h("div", {}, h("h4", {}, h("span", { class: "pen a" }), "A predicts"), distList(p.topk_a, "var(--a-soft)", next)),
+      h("div", {}, h("h4", {}, h("span", { class: "pen b" }), "B predicts"), distList(p.topk_b, "var(--b-soft)", next))),
+    h("dl", { class: "facts" },
+      h("dt", {}, "KL(A‖B)"), h("dd", {}, `${fmtKL(p.kl)} nats`),
+      floor != null && [h("dt", {}, "floor here"), h("dd", {}, `${fmtKL(floor)} nats`)],
+      h("dt", {}, "A's top-2 margin"), h("dd", {}, `${p.margin_a.toFixed(3)} nats`),
+      flip && [h("dt", {}, "A: own vs B's"), h("dd", {}, `${g.toFixed(3)} nats${tie ? " (near-tie)" : confident ? " (confident)" : ""}`)],
+      h("dt", {}, "A's entropy"), h("dd", {}, `${p.entropy_a.toFixed(3)} nats`),
+      p.lp_next_a != null && [h("dt", {}, "p(actual next)"), h("dd", {}, `A ${(100 * Math.exp(p.lp_next_a)).toFixed(2)}%, B ${(100 * Math.exp(p.lp_next_b)).toFixed(2)}%`)],
+      lastErr != null && [h("dt", {}, "last-layer diff"), h("dd", {}, lastErr.toExponential(2))]),
+    h("p", { class: "verdict" }, verdict),
+    c.repair_denoise && h("div", {}, h("h3", { style: "margin-top:.8rem" }, "Transplants at this position"), repairCurve(c, i),
+      h("p", { class: "hint" }, "Each point is a separate run on this text. A curve that falls early means the divergence was already in the residual stream at that depth. It holds for this input only.")));
+}
