@@ -78,6 +78,8 @@
         <p class="hint">Two extra passes per layer. Shows which layers' divergence actually reaches the output.</p>
         <label for="stride">Transplant every n-th layer</label>
         <input id="stride" type="number" min="1" value="1">
+        <label class="check"><input id="components" type="checkbox">Split each layer into attention and MLP</label>
+        <p class="hint">Two more passes per layer, at every layer. Shows which block of each layer adds the divergence.</p>
         <label class="check"><input id="attribution" type="checkbox">Attribute to settings</label>
         <p class="hint">Runs every combination of the settings that differ between A and B.</p>
       </fieldset>

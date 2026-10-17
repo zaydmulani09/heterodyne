@@ -106,8 +106,9 @@ function readForm() {
       max_chunks: +$("#max-chunks").value || 4,
       floor: $("#floor").checked,
       layers: $("#layers").checked,
-      repair: $("#repair").checked,
+      repair: $("#repair").checked || $("#components").checked,
       repair_stride: Math.max(1, +$("#stride").value || 1),
+      components: $("#components").checked,
       attribution: $("#attribution").checked,
       top_k: 8,
       skip_first: Math.max(0, +$("#skip").value || 0),
@@ -146,7 +147,7 @@ function fillForm(r) {
   if (r.input.kind === "generate") { $("#chat").checked = r.input.chat; $("#max-new").value = r.input.max_new; }
   $("#chunk").value = r.chunk_tokens; $("#max-chunks").value = r.max_chunks;
   $("#floor").checked = r.floor; $("#layers").checked = r.layers; $("#repair").checked = r.repair;
-  $("#stride").value = r.repair_stride; $("#attribution").checked = r.attribution;
+  $("#stride").value = r.repair_stride; $("#components").checked = !!r.components; $("#attribution").checked = r.attribution;
   $("#skip").value = r.skip_first ?? 0;
 }
 
