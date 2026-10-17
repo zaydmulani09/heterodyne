@@ -200,3 +200,18 @@ fn floor_stride_and_attribution_are_consistent() {
     assert!(ls.windows(2).all(|w| w[1] - w[0] <= 2));
     assert_eq!(*ls.last().unwrap(), r.chunks[0].layer_err.as_ref().unwrap().len() - 1);
 }
+
+#[test]
+fn bad_requests_are_rejected_before_running() {
+    let Some(p) = fixture() else { return };
+    let p = p.to_string_lossy().into_owned();
+    let mut req = request(&p, &p);
+    req.a.threads = 100_000;
+    assert!(analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap_err().contains("threads"));
+    let mut req = request(&p, &p);
+    req.top_k = usize::MAX;
+    assert!(req.validate().unwrap_err().contains("top_k"));
+    let mut req = request(&p, &p);
+    req.a.model = env!("CARGO_MANIFEST_DIR").to_string() + "/Cargo.toml";
+    assert!(analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap_err().contains("not a GGUF"));
+}
