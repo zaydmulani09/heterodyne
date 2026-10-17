@@ -222,4 +222,57 @@ const char * hd_system_info(void) {
     return llama_print_system_info();
 }
 
+// Teacher-forced pass over `toks` (one sequence, fresh context, logits for every position).
+int32_t hd_eval(void * mv, const hd_cfg * cfg, const int32_t * toks, int32_t n, const hd_hooks * hooks,
+                float * logits, char * err, int32_t errlen) {
+    auto * m = (llama_model *) mv;
+    HookState hs;
+    if (hooks && hooks->n > 0) {
+        hs.width = hooks->width;
+        hs.n_rows = n;
+        for (int32_t i = 0; i < hooks->n; i++) {
+            Hook h;
+            h.name = hooks->names[i];
+            h.out = hooks->out ? hooks->out[i] : nullptr;
+            h.src = hooks->src ? hooks->src[i] : nullptr;
+            hs.hooks.push_back(h);
+        }
+    }
+    llama_context * ctx = hs.hooks.empty() ? make_ctx(m, n, cfg, nullptr, nullptr) : make_ctx(m, n, cfg, eval_cb, &hs);
+    if (!ctx) { set_err(err, errlen, "failed to create context (check KV type / flash-attn combination)"); return -1; }
+
+    llama_batch b = llama_batch_init(n, 0, 1);
+    for (int32_t i = 0; i < n; i++) {
+        b.token[i] = toks[i]; b.pos[i] = i; b.n_seq_id[i] = 1; b.seq_id[i][0] = 0; b.logits[i] = 1;
+    }
+    b.n_tokens = n;
+    const int32_t rc = llama_decode(ctx, b);
+    int32_t ret = 0;
+    if (rc != 0 || !hs.error.empty()) {
+        set_err(err, errlen, hs.error.empty() ? "llama_decode failed (code " + std::to_string(rc) + ")" : hs.error);
+        ret = -1;
+    }
+    for (auto & h : hs.hooks) {
+        if (ret == 0 && h.rows_done != n) {
+            set_err(err, errlen, "tensor '" + h.name + "' saw " + std::to_string(h.rows_done) + " of " + std::to_string(n) +
+                                 " rows (not in this architecture's graph?)");
+            ret = -1;
+        }
+    }
+    if (ret == 0) {
+        const int32_t nv = llama_vocab_n_tokens(llama_model_get_vocab(m));
+        for (int32_t i = 0; i < n && ret == 0; i++) {
+            const float * row = llama_get_logits_ith(ctx, i);
+            if (any_non_finite(row, nv)) {
+                set_err(err, errlen, "non-finite logits (NaN or inf) at position " + std::to_string(i) + ": numeric overflow or a broken model file");
+                ret = -1;
+            }
+            memcpy(logits + (size_t) i * nv, row, nv * sizeof(float));
+        }
+    }
+    llama_batch_free(b);
+    llama_free(ctx);
+    return ret;
+}
+
 }  // extern "C"
