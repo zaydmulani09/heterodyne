@@ -89,3 +89,24 @@ pub fn file_sha256(path: &Path) -> Result<String, String> {
     HASHES.lock().unwrap().as_mut().unwrap().insert(key, h.clone());
     Ok(h)
 }
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+pub fn model_id(models: &mut Models, path: &str) -> Result<ModelId, String> {
+    let m = models.get(path)?;
+    let p = Path::new(path);
+    Ok(ModelId {
+        path: path.to_string(),
+        file_name: p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+        sha256: file_sha256(p)?,
+        file_bytes: std::fs::metadata(p).map(|m| m.len()).unwrap_or(0),
+        desc: m.info.desc.clone(),
+        general_name: m.meta("general.name"),
+        n_params: m.info.n_params,
+        n_layer: m.info.n_layer,
+        n_embd: m.info.n_embd,
+        n_vocab: m.info.n_vocab,
+    })
+}
