@@ -258,6 +258,10 @@ fn bad_requests_are_rejected_before_running() {
     req.top_k = usize::MAX;
     assert!(req.validate().unwrap_err().contains("top_k"));
     let mut req = request(&p, &p);
+    req.components = true;
+    req.repair_stride = 2;
+    assert!(req.validate().unwrap_err().contains("attention/MLP"));
+    let mut req = request(&p, &p);
     req.a.model = env!("CARGO_MANIFEST_DIR").to_string() + "/Cargo.toml";
     assert!(analysis::run(&req, &mut Models::default(), &AtomicBool::new(false), &|_| {}).unwrap_err().contains("not a GGUF"));
 }
