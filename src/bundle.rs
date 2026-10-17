@@ -25,3 +25,16 @@ pub struct ModelId {
     pub n_embd: usize,
     pub n_vocab: usize,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Provenance {
+    pub heterodyne: String,
+    pub llama_cpp_commit: String,
+    pub build: String,
+    /// llama.cpp's own CPU feature report; numerics depend on these code paths.
+    pub system_info: String,
+    pub os: String,
+    pub arch: String,
+    pub a: ModelId,
+    pub b: ModelId,
+}
