@@ -169,3 +169,62 @@ fn query(url: &str, key: &str) -> Option<String> {
         (k == key).then(|| percent_decode(v))
     })
 }
+
+fn handle(st: &mut State, req: &mut tiny_http::Request) -> Resp {
+    let url = req.url().to_string();
+    let path = url.split('?').next().unwrap_or("/").to_string();
+    fn hdr(req: &tiny_http::Request, name: &'static str) -> Option<String> {
+        req.headers().iter().find(|h| h.field.equiv(name)).map(|h| h.value.as_str().to_string())
+    }
+    let get = |name: &'static str| hdr(req, name);
+    // DNS-rebinding guard: only answer requests addressed to our own loopback origin.
+    if !get("Host").map_or(false, |h| st.origin_hosts.contains(&h)) {
+        return err(403, "bad host");
+    }
+    match (req.method(), path.as_str()) {
+        (Method::Get, "/") => return text(200, "text/html; charset=utf-8", INDEX.replace("__HD_TOKEN__", &st.token)),
+        (Method::Get, "/app.js") => return text(200, "text/javascript; charset=utf-8", APP_JS.into()),
+        (Method::Get, "/style.css") => return text(200, "text/css; charset=utf-8", STYLE.into()),
+        (Method::Get, "/fonts/archivo-wdth.woff2") => return font(FONT_UI),
+        (Method::Get, "/fonts/fragment-mono.woff2") => return font(FONT_MONO),
+        _ => {}
+    }
+    if !path.starts_with("/api/") {
+        return err(404, "not found");
+    }
+    if get("X-Heterodyne-Token").as_deref() != Some(st.token.as_str()) {
+        return err(403, "missing or wrong token");
+    }
+    let mut body = String::new();
+    if req.method() == &Method::Post {
+        if req.body_length().unwrap_or(0) > MAX_BODY
+            || req.as_reader().take(MAX_BODY as u64 + 1).read_to_string(&mut body).is_err()
+            || body.len() > MAX_BODY
+        {
+            return err(413, "body too large or not UTF-8");
+        }
+    }
+    match (req.method(), path.as_str()) {
+        (Method::Get, "/api/state") => ok(state_json(st)),
+        (Method::Post, "/api/run") => start_run(st, &body),
+        (Method::Get, "/api/job") => job_json(st, query(&url, "id").and_then(|s| s.parse().ok())),
+        (Method::Post, "/api/cancel") => {
+            if let Some(j) =
+                query(&url, "id").and_then(|s| s.parse::<u64>().ok()).and_then(|id| lock(&st.jobs).get(&id).map(|j| j.cancel.clone()))
+            {
+                j.store(true, Ordering::Relaxed);
+            }
+            ok(json!({}))
+        }
+        (Method::Post, "/api/save") => save(st, &body),
+        (Method::Get, "/api/experiment") => match query(&url, "file").and_then(|f| ws_file(st, &f)) {
+            Some(p) => match std::fs::read_to_string(&p) {
+                Ok(s) => text(200, "application/json", s),
+                Err(e) => err(404, &e.to_string()),
+            },
+            None => err(400, "bad file name"),
+        },
+        (Method::Post, "/api/verify") => start_verify(st, &body),
+        _ => err(404, "not found"),
+    }
+}
