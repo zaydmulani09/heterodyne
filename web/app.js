@@ -255,3 +255,11 @@ function showExperiment(e, file) {
   if (S.state) renderHistory();
   render();
 }
+// Largest divergence among scored positions (the first skip_first are shown but not counted).
+function argmaxKL(c) {
+  const k = Math.min(skipN(), c.pos.length - 1);
+  let b = k;
+  c.pos.forEach((p, i) => { if (i >= k && p.kl > c.pos[b].kl) b = i; });
+  return b;
+}
+const skipN = () => (S.exp && S.exp.request.skip_first) || 0;
