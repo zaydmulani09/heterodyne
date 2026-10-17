@@ -43,3 +43,17 @@ const vis = (t) => t.replace(/ /g, "·").replace(/\n/g, "↵").replace(/\t/g, "�
 const tok = (id) => (S.exp.results.vocab[id] ?? `#${id}`);
 // How much A preferred its own top token over B's (files before v0.1 lack gap_ab).
 const gap = (p) => p.gap_ab ?? p.margin_a;
+const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+
+// Sequential violet ramp for divergence (never the arm colours).
+const RAMP_L = ["#eef1f4", "#ddd2ec", "#b9a2dc", "#8b65c3", "#5d2e92", "#2f1052"];
+const RAMP_D = ["#171e26", "#2c2443", "#4b3376", "#7a4fb3", "#ad82e6", "#eadaff"];
+const parsed = new Map();
+function ramp(t) {
+  const key = dark() ? "d" : "l";
+  if (!parsed.has(key)) parsed.set(key, (key === "d" ? RAMP_D : RAMP_L).map((hex) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16))));
+  const st = parsed.get(key);
+  t = Math.min(1, Math.max(0, t)) * (st.length - 1);
+  const i = Math.min(st.length - 2, Math.floor(t)), f = t - i, a = st[i], b = st[i + 1];
+  return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
+}
