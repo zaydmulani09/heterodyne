@@ -68,6 +68,10 @@ You need two GGUFs of the same model with the same tokenizer, for example from
 heterodyne diff --a Qwen3-0.6B-BF16.gguf --b Qwen3-0.6B-Q4_K_M.gguf \
   --text-file examples/corpus.txt --chunk 128 --max-chunks 12 --repair -o bf16-vs-q4km.json
 
+# Within each layer, does the attention block or the MLP add it?
+heterodyne diff --a Qwen3-0.6B-BF16.gguf --b Qwen3-0.6B-Q4_K_M.gguf \
+  --text-file examples/corpus.txt --chunk 128 --max-chunks 12 --components
+
 # Same file twice: what do a q8_0 KV cache and a different batch split change, and which is it?
 heterodyne diff --a Qwen3-0.6B-Q8_0.gguf --b-set ctk=q8_0,ctv=q8_0,ub=63 \
   --text-file examples/corpus.txt --chunk 128 --max-chunks 12 --attribution
