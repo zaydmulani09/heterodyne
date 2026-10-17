@@ -331,3 +331,13 @@ fn floor_split(cfg_ubatch: i32, n: usize) -> i32 {
     let half = (base + 1) / 2;
     (if half % 2 == 0 { half + 1 } else { half }).clamp(1, (n as i32 - 1).max(1))
 }
+
+/// Capture buffers for every layer's residual output.
+fn capture_all(m: &Model, cfg: &Cfg, toks: &[i32], n_layer: usize) -> Result<(Vec<f32>, Vec<Vec<f32>>), String> {
+    let w = m.info.n_embd;
+    let mut bufs: Vec<Vec<f32>> = (0..n_layer).map(|_| vec![0f32; toks.len() * w]).collect();
+    let mut hooks: Vec<Hook> = bufs.iter_mut().enumerate().map(|(l, b)| Hook { name: l_out(l), capture: Some(b), patch: None }).collect();
+    let logits = m.eval(cfg, toks, &mut hooks)?;
+    drop(hooks);
+    Ok((logits, bufs))
+}
